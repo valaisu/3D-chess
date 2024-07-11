@@ -32,8 +32,8 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::vector<std::string> MODEL_PATHS = {"models/knight.obj"};
-const std::vector<std::string> PIECE_NAMES = {"Knight"};
+const std::vector<std::string> MODEL_PATHS = {"models/knight.obj", "models/rook.obj"};
+const std::vector<std::string> PIECE_NAMES = {"Knight", "Rook"};
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -147,9 +147,11 @@ struct UniformBufferObject {
 // All of the pieces are stored in a object
 // I strongly suspect this is not how thisgs should be done, this is my first vulkan program,
 // and I dont want to try to edit like 7 functions to add multiple objects
+
+// It would be really nice to be able to move objects by just editing the UBOs
 struct ChessPiece {
-    int startVertex; // probably not best practice var type
-    int endVertex; // these refer to locations in vertexbuffer
+    uint32_t startVertex; // probably not best practice var type
+    uint32_t endVertex; // these refer to locations in vertexbuffer
 
     std::string name;
     bool colorW; // true -> white, false -> black
@@ -260,6 +262,7 @@ private:
             switch (key) {
                 case GLFW_KEY_LEFT:
                     rotateSpeed += 1.0;
+                    moveModel(glm::vec3(-1.0, -1.0, -1.0), chessPieces[0].startVertex, chessPieces[0].endVertex);
                     break;
                 case GLFW_KEY_RIGHT:
                     rotateSpeed -= 1.0;
@@ -295,6 +298,7 @@ private:
         createTextureImageView();
         createTextureSampler();
         loadModel();
+
         createVertexBuffer();
         createIndexBuffer();
         createUniformBuffers();
@@ -302,6 +306,8 @@ private:
         createDescriptorSets();
         createCommandBuffers();
         createSyncObjects();
+
+        moveModel(glm::vec3(-1.0, -1.0, -1.0), chessPieces[0].startVertex, chessPieces[0].endVertex);
     }
     
     void mainLoop() {
@@ -1109,6 +1115,21 @@ private:
         }
     }
 
+    void moveModel(glm::vec3 moveVector, uint32_t startVertex, uint32_t endVertex) {
+        for (uint32_t i = startVertex; i < endVertex; i++) {
+            vertices[i].pos += moveVector;
+        }
+        // now I'm not checking if a frame is being drawn while I edit stuff
+        // and yes the right way to do this is to have multiple objects and edit UBOs
+        vkDestroyBuffer(device, vertexBuffer, nullptr);
+        createVertexBuffer();
+        //printf("Here!\n");
+    }
+
+    void rotateModel(float x, float y, float z, uint32_t startVertex, uint32_t endVertex) {
+        
+    }
+
     void createVertexBuffer() {
         VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -1410,8 +1431,8 @@ private:
 
         UniformBufferObject ubo{};
         ubo.model = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
+        ubo.view = glm::lookAt(glm::vec3(3.0f, 3.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 30.0f);
         ubo.proj[1][1] *= -1;
 
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1699,4 +1720,3 @@ int main() {
 
     return EXIT_SUCCESS;
 }
-
