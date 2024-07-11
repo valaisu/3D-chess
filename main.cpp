@@ -32,7 +32,8 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::string MODEL_PATH = "models/viking_room.obj";
+const std::vector<std::string> MODEL_PATHS = {"models/knight.obj"};
+const std::vector<std::string> PIECE_NAMES = {"Knight"};
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -142,6 +143,19 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
+
+// All of the pieces are stored in a object
+// I strongly suspect this is not how thisgs should be done, this is my first vulkan program,
+// and I dont want to try to edit like 7 functions to add multiple objects
+struct ChessPiece {
+    int startVertex; // probably not best practice var type
+    int endVertex; // these refer to locations in vertexbuffer
+
+    std::string name;
+    bool colorW; // true -> white, false -> black
+    bool eaten = false;
+};
+
 class HelloTriangleApplication {
 public:
     void run() {
@@ -216,6 +230,8 @@ private:
 
     float rotateSpeed = 0.0f;
 
+    std::vector<ChessPiece> chessPieces;
+    
 
     bool framebufferResized = false;
 
@@ -1034,47 +1050,62 @@ private:
     }
 
     void loadModel() {
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        std::string warn, err;
+        chessPieces.resize(32);
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-            throw std::runtime_error(warn + err);
-        }
+        u_int32_t vertexCount = 0;
 
-        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
 
-        for (const auto& shape : shapes) {
-            for (const auto& index : shape.mesh.indices) {
-                Vertex vertex{};
+            tinyobj::attrib_t attrib;
+            std::vector<tinyobj::shape_t> shapes;
+            std::vector<tinyobj::material_t> materials;
+            std::string warn, err;
 
-                vertex.pos = {
-                    attrib.vertices[3 * index.vertex_index + 0],
-                    attrib.vertices[3 * index.vertex_index + 1],
-                    attrib.vertices[3 * index.vertex_index + 2]
-                };
-
-                vertex.texCoord = {
-                    attrib.texcoords[2 * index.texcoord_index + 0],
-                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                };
-
-                vertex.color = {1.0f, 1.0f, 1.0f};
-
-                vertex.normal = {
-                    attrib.normals[3 * index.normal_index + 0],
-                    attrib.normals[3 * index.normal_index + 1],
-                    attrib.normals[3 * index.normal_index + 2]
-                };
-
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                    vertices.push_back(vertex);
-                }
-
-                indices.push_back(uniqueVertices[vertex]);
+            if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATHS[i].c_str())) {
+                throw std::runtime_error(warn + err);
             }
+
+            std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+            chessPieces[i].startVertex = vertexCount;
+
+            for (const auto& shape : shapes) {
+                for (const auto& index : shape.mesh.indices) {
+                    Vertex vertex{};
+
+                    vertex.pos = {
+                        attrib.vertices[3 * index.vertex_index + 0],
+                        attrib.vertices[3 * index.vertex_index + 1],
+                        attrib.vertices[3 * index.vertex_index + 2]
+                    };
+
+                    vertex.texCoord = {
+                        attrib.texcoords[2 * index.texcoord_index + 0],
+                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                    };
+
+                    vertex.color = {1.0f, 1.0f, 1.0f};
+
+                    vertex.normal = {
+                        attrib.normals[3 * index.normal_index + 0],
+                        attrib.normals[3 * index.normal_index + 1],
+                        attrib.normals[3 * index.normal_index + 2]
+                    };
+
+                    if (uniqueVertices.count(vertex) == 0) {
+                        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+                        vertices.push_back(vertex);
+                    }
+
+                    indices.push_back(uniqueVertices[vertex]);
+                }
+            }
+
+            // update each piece
+            vertexCount += static_cast<uint32_t>(vertices.size());
+            chessPieces[i].endVertex = vertexCount;
+            chessPieces[i].colorW = i<16;
+            chessPieces[i].name = PIECE_NAMES[i];
         }
     }
 
@@ -1668,3 +1699,4 @@ int main() {
 
     return EXIT_SUCCESS;
 }
+
