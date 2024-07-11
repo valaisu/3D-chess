@@ -214,6 +214,9 @@ private:
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
     float delta = 0.0f;
 
+    float rotateSpeed = 0.0f;
+
+
     bool framebufferResized = false;
 
     void initWindow() {
@@ -224,11 +227,38 @@ private:
         window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
         glfwSetWindowUserPointer(window, this);
         glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+        glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+            auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+            app->keyCallback(window, key, scancode, action, mods);
+        });
     }
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
         auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
         app->framebufferResized = true;
+    }
+
+    void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+        if (action == GLFW_PRESS) {
+            switch (key) {
+                case GLFW_KEY_LEFT:
+                    rotateSpeed += 1.0;
+                    break;
+                case GLFW_KEY_RIGHT:
+                    rotateSpeed -= 1.0;
+                    break;
+            }
+        } else if (action == GLFW_RELEASE) {
+            switch (key) {
+                case GLFW_KEY_LEFT:
+                    rotateSpeed -= 1.0;
+                    break;
+                case GLFW_KEY_RIGHT:
+                    rotateSpeed += 1.0;
+                    break;
+            }
+        }
     }
 
     void initVulkan() {
@@ -257,7 +287,7 @@ private:
         createCommandBuffers();
         createSyncObjects();
     }
-
+    
     void mainLoop() {
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
@@ -1345,7 +1375,7 @@ private:
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
-        rotationAngle += delta;
+        rotationAngle += rotateSpeed * delta;
 
         UniformBufferObject ubo{};
         ubo.model = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
