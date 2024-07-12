@@ -33,9 +33,11 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const std::vector<std::string> MODEL_PATHS = {"models/rook.obj", "models/knight.obj"};
+const std::vector<std::string> MODEL_NAMES = {"Rook", "Knight"};
+const std::vector<glm::vec3> MODEL_LOCATIONS = {glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f)};
 const std::string TEXTURE_PATH = "textures/viking_room.png";
-const size_t OBJECT_COUNT = MODEL_PATHS.size();
 
+const size_t OBJECT_COUNT = MODEL_PATHS.size();
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validationLayers = {
@@ -143,6 +145,12 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
+struct ChessPiece {
+    std::string name;
+    uint32_t index;
+    glm::vec3 position;
+};
+
 class HelloTriangleApplication {
 public:
     void run() {
@@ -209,13 +217,16 @@ private:
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
 
-
+    // moving related
     float rotationAngle = 0.0;
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
     float delta = 0.0f;
 
     float rotateSpeed = 0.0f;
+
+    // mesh related
+    std::vector<ChessPiece> chessPieces;
 
 
     bool framebufferResized = false;
@@ -336,7 +347,7 @@ private:
 
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
             vkDestroyBuffer(device, indexBufferVector[i], nullptr);
             vkFreeMemory(device, indexBufferMemoryVector[i], nullptr);
 
@@ -1038,10 +1049,16 @@ private:
 
     void loadModels() {
 
-        indicesVector.resize(MODEL_PATHS.size());
-        verticesVector.resize(MODEL_PATHS.size());
+        indicesVector.resize(OBJECT_COUNT);
+        verticesVector.resize(OBJECT_COUNT);
 
-        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+        chessPieces.resize(OBJECT_COUNT);
+
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+
+            chessPieces[i].position = MODEL_LOCATIONS[i];
+            chessPieces[i].index = i;
+            chessPieces[i].name = i;
 
             tinyobj::attrib_t attrib;
             std::vector<tinyobj::shape_t> shapes;
@@ -1089,10 +1106,10 @@ private:
     }
 
     void createVertexBuffers() {
-        vertexBufferVector.resize(MODEL_PATHS.size());
-        vertexBufferMemoryVector.resize(MODEL_PATHS.size());
+        vertexBufferVector.resize(OBJECT_COUNT);
+        vertexBufferMemoryVector.resize(OBJECT_COUNT);
 
-        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
             VkDeviceSize bufferSize = sizeof(verticesVector[i][0]) * verticesVector[i].size();
 
             VkBuffer stagingBuffer;
@@ -1114,10 +1131,10 @@ private:
     }
 
     void createIndexBuffers() {
-        indexBufferVector.resize(MODEL_PATHS.size());
-        indexBufferMemoryVector.resize(MODEL_PATHS.size());
+        indexBufferVector.resize(OBJECT_COUNT);
+        indexBufferMemoryVector.resize(OBJECT_COUNT);
 
-        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
             VkDeviceSize bufferSize = sizeof(indicesVector[i][0]) * indicesVector[i].size();
 
             VkBuffer stagingBuffer;
@@ -1361,8 +1378,7 @@ private:
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
                 vkCmdBindIndexBuffer(commandBuffer, indexBufferVector[i], 0, VK_INDEX_TYPE_UINT32);
-
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame*OBJECT_COUNT+i], 0, nullptr);
 
                 vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indicesVector[i].size()), 1, 0, 0, 0);
             }
@@ -1396,16 +1412,21 @@ private:
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
+        uint32_t pieceId = currentImage%OBJECT_COUNT;
 
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
         rotationAngle += rotateSpeed * delta;
 
+        //glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
+
         UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
+        glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
+        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.model = moveMatrix * rotationMatrix;
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 3.0f), glm::vec3(-2.0f, -2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
         ubo.proj[1][1] *= -1;
 
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1424,8 +1445,8 @@ private:
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
-        for (size_t i = currentFrame * OBJECT_COUNT; i < (currentFrame+1) * OBJECT_COUNT; i++) {
-            updateUniformBuffer(i);
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+            updateUniformBuffer(currentFrame * OBJECT_COUNT + i);
         }
 
 
