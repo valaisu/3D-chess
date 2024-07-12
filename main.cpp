@@ -36,21 +36,25 @@ const std::vector<std::string> MODEL_PATHS = {
     "models/rook.obj", "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/king.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj",
     "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", 
     "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", 
-    "models/rook.obj", "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/king.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj"
+    "models/rook.obj", "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/king.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj",
+    "models/chessBoard1.obj", "models/chessBoard2.obj"
 };
 const std::vector<std::string> MODEL_NAMES = {
     "Rook", "Knight", "Bishop", "Queen", "King", "Bishop", "Knight", "Rook",
     "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", 
     "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", 
-    "Rook", "Knight", "Bishop", "Queen", "King", "Bishop", "Knight", "Rook"
+    "Rook", "Knight", "Bishop", "Queen", "King", "Bishop", "Knight", "Rook",
+    "Light squares", "Dark squares"
 };
 const std::vector<glm::vec3> MODEL_LOCATIONS = {
     glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f), glm::vec3(-3.5f, -1.5f, 0.0f), glm::vec3(-3.5f, 0.5f, 0.0f), glm::vec3(-3.5f, -0.5f, 0.0f), glm::vec3(-3.5f, 1.5f, 0.0f), glm::vec3(-3.5f, 2.5f, 0.0f), glm::vec3(-3.5f, 3.5f, 0.0f),
     glm::vec3(-2.5f, -3.5f, 0.0f), glm::vec3(-2.5f, -2.5f, 0.0f), glm::vec3(-2.5f, -1.5f, 0.0f), glm::vec3(-2.5f, 0.5f, 0.0f), glm::vec3(-2.5f, -0.5f, 0.0f), glm::vec3(-2.5f, 1.5f, 0.0f), glm::vec3(-2.5f, 2.5f, 0.0f), glm::vec3(-2.5f, 3.5f, 0.0f),
     glm::vec3(2.5f, -3.5f, 0.0f), glm::vec3(2.5f, -2.5f, 0.0f), glm::vec3(2.5f, -1.5f, 0.0f), glm::vec3(2.5f, 0.5f, 0.0f), glm::vec3(2.5f, -0.5f, 0.0f), glm::vec3(2.5f, 1.5f, 0.0f), glm::vec3(2.5f, 2.5f, 0.0f), glm::vec3(2.5f, 3.5f, 0.0f),
-    glm::vec3(3.5f, -3.5f, 0.0f), glm::vec3(3.5f, -2.5f, 0.0f), glm::vec3(3.5f, -1.5f, 0.0f), glm::vec3(3.5f, 0.5f, 0.0f), glm::vec3(3.5f, -0.5f, 0.0f), glm::vec3(3.5f, 1.5f, 0.0f), glm::vec3(3.5f, 2.5f, 0.0f), glm::vec3(3.5f, 3.5f, 0.0f)
+    glm::vec3(3.5f, -3.5f, 0.0f), glm::vec3(3.5f, -2.5f, 0.0f), glm::vec3(3.5f, -1.5f, 0.0f), glm::vec3(3.5f, 0.5f, 0.0f), glm::vec3(3.5f, -0.5f, 0.0f), glm::vec3(3.5f, 1.5f, 0.0f), glm::vec3(3.5f, 2.5f, 0.0f), glm::vec3(3.5f, 3.5f, 0.0f),
+    glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f)
 };
-const std::string TEXTURE_PATH = "textures/viking_room.png";
+
+const std::string TEXTURE_PATH = "textures/viking_room.png"; // NOTE: this is not currently in use
 
 const size_t OBJECT_COUNT = MODEL_PATHS.size();
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -1077,6 +1081,7 @@ private:
             chessPieces[i].index = i;
             chessPieces[i].name = i;
             chessPieces[i].colorWhite = i < 16;
+            // the board objects are hanlded a bit weirdly here but it does not cause problems in the program
 
             tinyobj::attrib_t attrib;
             std::vector<tinyobj::shape_t> shapes;
@@ -1103,11 +1108,15 @@ private:
                         attrib.texcoords[2 * index.texcoord_index + 0],
                         1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                     };
-                    if (chessPieces[i].colorWhite) {
+
+                    if (chessPieces[i].index < 16) {
                         vertex.color = {0.91f, 0.84f, 0.75f};
-                    }
-                    else {
+                    } else if (chessPieces[i].index < 32) {
                         vertex.color = {0.18f, 0.16f, 0.14f};
+                    } else if (chessPieces[i].index < 33) {
+                        vertex.color = {0.95f, 0.95f, 0.95f};
+                    } else {
+                        vertex.color = {0.05f, 0.05f, 0.05f};
                     }
 
                     vertex.normal = {
@@ -1742,3 +1751,4 @@ int main() {
 
     return EXIT_SUCCESS;
 }
+
