@@ -32,8 +32,10 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::vector<std::string> MODEL_PATHS = {"models/knight.obj", "models/rook.obj"};
-const std::vector<std::string> PIECE_NAMES = {"Knight", "Rook"};
+
+const std::vector<std::string> MODEL_PATHS = {"models/rook.obj"};//, "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/queen.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj"};
+const std::vector<std::string> PIECE_NAMES = {"Rook"};//, "Knight", "Bishop", "Queen", "Queen", "Bishop", "Knight", "Rook"};
+const std::vector<glm::vec3> INITIAL_POSITIONS = {glm::vec3(-4.0f, -4.0f, 0.0f)};//, glm::vec3(-3.0f, -4.0f, 0.0f), glm::vec3(-2.0f, -4.0f, 0.0f), glm::vec3(-1.0f, -4.0f, 0.0f), glm::vec3(0.0f, -3.0f, 0.0f), glm::vec3(1.0f, -3.0f, 0.0f), glm::vec3(2.0f, -3.0f, 0.0f), glm::vec3(3.0f, -3.0f, 0.0f)};
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -262,7 +264,6 @@ private:
             switch (key) {
                 case GLFW_KEY_LEFT:
                     rotateSpeed += 1.0;
-                    moveModel(glm::vec3(-1.0, -1.0, -1.0), chessPieces[0].startVertex, chessPieces[0].endVertex);
                     break;
                 case GLFW_KEY_RIGHT:
                     rotateSpeed -= 1.0;
@@ -298,6 +299,7 @@ private:
         createTextureImageView();
         createTextureSampler();
         loadModel();
+        initializationMoves();
 
         createVertexBuffer();
         createIndexBuffer();
@@ -307,6 +309,7 @@ private:
         createCommandBuffers();
         createSyncObjects();
 
+        
         moveModel(glm::vec3(-1.0, -1.0, -1.0), chessPieces[0].startVertex, chessPieces[0].endVertex);
     }
     
@@ -1060,7 +1063,7 @@ private:
 
         u_int32_t vertexCount = 0;
 
-        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+        for (size_t i = 0; i <  MODEL_PATHS.size(); i++) {
 
             tinyobj::attrib_t attrib;
             std::vector<tinyobj::shape_t> shapes;
@@ -1115,19 +1118,30 @@ private:
         }
     }
 
+    // Remember to call update moves!
     void moveModel(glm::vec3 moveVector, uint32_t startVertex, uint32_t endVertex) {
         for (uint32_t i = startVertex; i < endVertex; i++) {
             vertices[i].pos += moveVector;
         }
-        // now I'm not checking if a frame is being drawn while I edit stuff
+        // Now I'm not checking if a frame is being drawn while I edit stuff
         // and yes the right way to do this is to have multiple objects and edit UBOs
-        vkDestroyBuffer(device, vertexBuffer, nullptr);
-        createVertexBuffer();
-        //printf("Here!\n");
     }
+
 
     void rotateModel(float x, float y, float z, uint32_t startVertex, uint32_t endVertex) {
         
+    }
+
+    void updateMoves() {
+        vkDestroyBuffer(device, vertexBuffer, nullptr);
+        createVertexBuffer();
+    }
+
+    void initializationMoves() {
+        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+            moveModel(INITIAL_POSITIONS[i], chessPieces[i].startVertex, chessPieces[i].endVertex);
+        }
+        updateMoves();
     }
 
     void createVertexBuffer() {
@@ -1431,7 +1445,7 @@ private:
 
         UniformBufferObject ubo{};
         ubo.model = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(3.0f, 3.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.view = glm::lookAt(glm::vec3(3.0f, 3.0f, 3.5f), glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 30.0f);
         ubo.proj[1][1] *= -1;
 
@@ -1720,3 +1734,4 @@ int main() {
 
     return EXIT_SUCCESS;
 }
+
