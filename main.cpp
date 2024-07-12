@@ -239,7 +239,8 @@ private:
 
     // moving related
     float cameraRotationAngle = 0.0;
-    glm::vec3 cameraOffset = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraPositionOriginal = glm::vec3(6.0f, 6.0f, 10.0f);
+    glm::vec3 cameraPosition = glm::vec3(6.0f, 6.0f, 10.0f);
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
     float delta = 0.0f;
@@ -249,6 +250,11 @@ private:
     // mesh related
     std::vector<ChessPiece> chessPieces;
 
+    // UBO 
+    glm::mat4 viewMatrix;// = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 projMatrix;// = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
+    //        ubo.view = glm::lookAt(newCameraPos3, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    //    ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
 
     bool framebufferResized = false;
 
@@ -265,11 +271,28 @@ private:
             auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
             app->keyCallback(window, key, scancode, action, mods);
         });
+
+        glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int button, int action, int mods) {
+            auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+            app->mouseButtonCallback(window, button, action, mods);
+        });
     }
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
         auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
         app->framebufferResized = true;
+    }
+
+    void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            std::cout << "Mouse clicked at: (" << xpos << ", " << ypos << ")" << std::endl;
+            float ndcX = (2.0f*xpos) / WIDTH - 1.0f;
+            float ndcY = (2.0f*ypos) / HEIGHT - 1.0f;
+            std::cout << "Aka: (" << ndcX << ", " << ndcY << ")" << std::endl;
+
+        }
     }
 
     void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -1445,25 +1468,29 @@ private:
     void updateUniformBuffer(uint32_t currentImage) {
         uint32_t pieceId = currentImage%OBJECT_COUNT;
 
+        UniformBufferObject ubo{};
+        glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
+        
+        ubo.model = moveMatrix;// * rotationMatrix; 
+        ubo.view = viewMatrix;
+        ubo.proj = projMatrix;
+        ubo.proj[1][1] *= -1;
+
+        memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+    }
+
+    void updateCameraPosition() {
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
         cameraRotationAngle += rotateSpeed * delta;
 
-        glm::vec3 cameraPos(6.0f, 6.0f, 10.0f);
         glm::mat4 cameraRotationMatrix = glm::rotate(glm::mat4(1.0f), cameraRotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        glm::vec4 newCameraPos = cameraRotationMatrix * glm::vec4(cameraPos, 1.0f);
-        glm::vec3 newCameraPos3 = glm::vec3(newCameraPos);
+        glm::vec4 newCameraPos = cameraRotationMatrix * glm::vec4(cameraPositionOriginal, 1.0f);
+        cameraPosition = glm::vec3(newCameraPos);
 
-        UniformBufferObject ubo{};
-        glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
-        
-        ubo.model = moveMatrix;// * rotationMatrix; 
-        ubo.view = glm::lookAt(newCameraPos3, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
-        ubo.proj[1][1] *= -1;
-
-        memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+        viewMatrix = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        projMatrix = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
     }
 
     void drawFrame() {
@@ -1479,6 +1506,7 @@ private:
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
+        updateCameraPosition();
         for (size_t i = 0; i < OBJECT_COUNT; i++) {
             updateUniformBuffer(currentFrame * OBJECT_COUNT + i);
         }
