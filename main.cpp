@@ -35,6 +35,7 @@ const uint32_t HEIGHT = 600;
 const std::vector<std::string> MODEL_PATHS = {"models/rook.obj", "models/knight.obj"};
 const std::vector<std::string> MODEL_NAMES = {"Rook", "Knight"};
 const std::vector<glm::vec3> MODEL_LOCATIONS = {glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f)};
+
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const size_t OBJECT_COUNT = MODEL_PATHS.size();
@@ -149,6 +150,7 @@ struct ChessPiece {
     std::string name;
     uint32_t index;
     glm::vec3 position;
+
 };
 
 class HelloTriangleApplication {
@@ -256,6 +258,7 @@ private:
             switch (key) {
                 case GLFW_KEY_LEFT:
                     rotateSpeed += 1.0;
+                    moveModel(glm::vec3(-1.0, -1.0, -1.0), chessPieces[0].startVertex, chessPieces[0].endVertex);
                     break;
                 case GLFW_KEY_RIGHT:
                     rotateSpeed -= 1.0;
@@ -293,11 +296,14 @@ private:
         loadModels();
         createVertexBuffers();
         createIndexBuffers();
+
         createUniformBuffers();
         createDescriptorPool();
         createDescriptorSets();
         createCommandBuffers();
         createSyncObjects();
+
+        moveModel(glm::vec3(-1.0, -1.0, -1.0), chessPieces[0].startVertex, chessPieces[0].endVertex);
     }
     
     void mainLoop() {
@@ -1075,6 +1081,7 @@ private:
                 for (const auto& index : shape.mesh.indices) {
                     Vertex vertex{};
 
+
                     vertex.pos = {
                         attrib.vertices[3 * index.vertex_index + 0],
                         attrib.vertices[3 * index.vertex_index + 1],
@@ -1100,9 +1107,31 @@ private:
                     }
 
                     indicesVector[i].push_back(uniqueVertices[vertex]);
+
                 }
             }
+
+            // update each piece
+            vertexCount += static_cast<uint32_t>(vertices.size());
+            chessPieces[i].endVertex = vertexCount;
+            chessPieces[i].colorW = i<16;
+            chessPieces[i].name = PIECE_NAMES[i];
         }
+    }
+
+    void moveModel(glm::vec3 moveVector, uint32_t startVertex, uint32_t endVertex) {
+        for (uint32_t i = startVertex; i < endVertex; i++) {
+            vertices[i].pos += moveVector;
+        }
+        // now I'm not checking if a frame is being drawn while I edit stuff
+        // and yes the right way to do this is to have multiple objects and edit UBOs
+        vkDestroyBuffer(device, vertexBuffer, nullptr);
+        createVertexBuffer();
+        //printf("Here!\n");
+    }
+
+    void rotateModel(float x, float y, float z, uint32_t startVertex, uint32_t endVertex) {
+        
     }
 
     void createVertexBuffers() {
@@ -1427,6 +1456,7 @@ private:
         ubo.model = moveMatrix * rotationMatrix;
         ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 3.0f), glm::vec3(-2.0f, -2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
+
         ubo.proj[1][1] *= -1;
 
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
