@@ -32,10 +32,13 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::vector<std::string> MODEL_PATHS = {"models/knight.obj", "models/rook.obj"};
-const std::vector<std::string> PIECE_NAMES = {"Knight", "Rook"};
+const std::vector<std::string> MODEL_PATHS = {"models/rook.obj", "models/knight.obj"};
+const std::vector<std::string> MODEL_NAMES = {"Rook", "Knight"};
+const std::vector<glm::vec3> MODEL_LOCATIONS = {glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f)};
+
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
+const size_t OBJECT_COUNT = MODEL_PATHS.size();
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validationLayers = {
@@ -143,19 +146,11 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
-
-// All of the pieces are stored in a object
-// I strongly suspect this is not how thisgs should be done, this is my first vulkan program,
-// and I dont want to try to edit like 7 functions to add multiple objects
-
-// It would be really nice to be able to move objects by just editing the UBOs
 struct ChessPiece {
-    uint32_t startVertex; // probably not best practice var type
-    uint32_t endVertex; // these refer to locations in vertexbuffer
-
     std::string name;
-    bool colorW; // true -> white, false -> black
-    bool eaten = false;
+    uint32_t index;
+    glm::vec3 position;
+
 };
 
 class HelloTriangleApplication {
@@ -203,12 +198,12 @@ private:
     VkImageView textureImageView;
     VkSampler textureSampler;
 
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
+    std::vector<std::vector<Vertex>> verticesVector;
+    std::vector<std::vector<uint32_t>> indicesVector;
+    std::vector<VkBuffer> vertexBufferVector;
+    std::vector<VkDeviceMemory> vertexBufferMemoryVector;
+    std::vector<VkBuffer> indexBufferVector;
+    std::vector<VkDeviceMemory> indexBufferMemoryVector;
 
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;
@@ -224,7 +219,7 @@ private:
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
 
-
+    // moving related
     float rotationAngle = 0.0;
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
@@ -232,8 +227,9 @@ private:
 
     float rotateSpeed = 0.0f;
 
+    // mesh related
     std::vector<ChessPiece> chessPieces;
-    
+
 
     bool framebufferResized = false;
 
@@ -297,10 +293,10 @@ private:
         createTextureImage();
         createTextureImageView();
         createTextureSampler();
-        loadModel();
+        loadModels();
+        createVertexBuffers();
+        createIndexBuffers();
 
-        createVertexBuffer();
-        createIndexBuffer();
         createUniformBuffers();
         createDescriptorPool();
         createDescriptorSets();
@@ -342,7 +338,7 @@ private:
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT; i++) {
             vkDestroyBuffer(device, uniformBuffers[i], nullptr);
             vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
         }
@@ -357,11 +353,13 @@ private:
 
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-        vkDestroyBuffer(device, indexBuffer, nullptr);
-        vkFreeMemory(device, indexBufferMemory, nullptr);
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+            vkDestroyBuffer(device, indexBufferVector[i], nullptr);
+            vkFreeMemory(device, indexBufferMemoryVector[i], nullptr);
 
-        vkDestroyBuffer(device, vertexBuffer, nullptr);
-        vkFreeMemory(device, vertexBufferMemory, nullptr);
+            vkDestroyBuffer(device, vertexBufferVector[i], nullptr);
+            vkFreeMemory(device, vertexBufferMemoryVector[i], nullptr);
+        }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -1055,12 +1053,18 @@ private:
         endSingleTimeCommands(commandBuffer);
     }
 
-    void loadModel() {
-        chessPieces.resize(32);
+    void loadModels() {
 
-        u_int32_t vertexCount = 0;
+        indicesVector.resize(OBJECT_COUNT);
+        verticesVector.resize(OBJECT_COUNT);
 
-        for (size_t i = 0; i < MODEL_PATHS.size(); i++) {
+        chessPieces.resize(OBJECT_COUNT);
+
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+
+            chessPieces[i].position = MODEL_LOCATIONS[i];
+            chessPieces[i].index = i;
+            chessPieces[i].name = i;
 
             tinyobj::attrib_t attrib;
             std::vector<tinyobj::shape_t> shapes;
@@ -1073,11 +1077,10 @@ private:
 
             std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
-            chessPieces[i].startVertex = vertexCount;
-
             for (const auto& shape : shapes) {
                 for (const auto& index : shape.mesh.indices) {
                     Vertex vertex{};
+
 
                     vertex.pos = {
                         attrib.vertices[3 * index.vertex_index + 0],
@@ -1099,11 +1102,12 @@ private:
                     };
 
                     if (uniqueVertices.count(vertex) == 0) {
-                        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                        vertices.push_back(vertex);
+                        uniqueVertices[vertex] = static_cast<uint32_t>(verticesVector[i].size());
+                        verticesVector[i].push_back(vertex);
                     }
 
-                    indices.push_back(uniqueVertices[vertex]);
+                    indicesVector[i].push_back(uniqueVertices[vertex]);
+
                 }
             }
 
@@ -1130,54 +1134,65 @@ private:
         
     }
 
-    void createVertexBuffer() {
-        VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    void createVertexBuffers() {
+        vertexBufferVector.resize(OBJECT_COUNT);
+        vertexBufferMemoryVector.resize(OBJECT_COUNT);
 
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+            VkDeviceSize bufferSize = sizeof(verticesVector[i][0]) * verticesVector[i].size();
 
-        void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-            memcpy(data, vertices.data(), (size_t) bufferSize);
-        vkUnmapMemory(device, stagingBufferMemory);
+            VkBuffer stagingBuffer;
+            VkDeviceMemory stagingBufferMemory;
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+            void* data;
+            vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+                memcpy(data, verticesVector[i].data(), (size_t) bufferSize);
+            vkUnmapMemory(device, stagingBufferMemory);
 
-        copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferVector[i], vertexBufferMemoryVector[i]);
 
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+            copyBuffer(stagingBuffer, vertexBufferVector[i], bufferSize);
+
+            vkDestroyBuffer(device, stagingBuffer, nullptr);
+            vkFreeMemory(device, stagingBufferMemory, nullptr);
+        }
     }
 
-    void createIndexBuffer() {
-        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+    void createIndexBuffers() {
+        indexBufferVector.resize(OBJECT_COUNT);
+        indexBufferMemoryVector.resize(OBJECT_COUNT);
 
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+            VkDeviceSize bufferSize = sizeof(indicesVector[i][0]) * indicesVector[i].size();
 
-        void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-            memcpy(data, indices.data(), (size_t) bufferSize);
-        vkUnmapMemory(device, stagingBufferMemory);
+            VkBuffer stagingBuffer;
+            VkDeviceMemory stagingBufferMemory;
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+            void* data;
+            vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+                memcpy(data, indicesVector[i].data(), (size_t) bufferSize);
+            vkUnmapMemory(device, stagingBufferMemory);
 
-        copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferVector[i], indexBufferMemoryVector[i]);
 
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+            copyBuffer(stagingBuffer, indexBufferVector[i], bufferSize);
+
+            vkDestroyBuffer(device, stagingBuffer, nullptr);
+            vkFreeMemory(device, stagingBufferMemory, nullptr);
+        }
     }
 
     void createUniformBuffers() {
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
-        uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-        uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-        uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+        uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        // UBOs of the same frame are next to each other
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT; i++) {
             createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
 
             vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
@@ -1187,15 +1202,15 @@ private:
     void createDescriptorPool() {
         std::array<VkDescriptorPoolSize, 2> poolSizes{};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
 
         if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
@@ -1203,48 +1218,50 @@ private:
     }
 
     void createDescriptorSets() {
-        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT, descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = descriptorPool;
-        allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
         allocInfo.pSetLayouts = layouts.data();
 
-        descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+        descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
         if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = uniformBuffers[i];
-            bufferInfo.offset = 0;
-            bufferInfo.range = sizeof(UniformBufferObject);
+            for (size_t j = 0; j < OBJECT_COUNT; j++) {
+                VkDescriptorBufferInfo bufferInfo{};
+                bufferInfo.buffer = uniformBuffers[i * OBJECT_COUNT + j];
+                bufferInfo.offset = 0;
+                bufferInfo.range = sizeof(UniformBufferObject);
 
-            VkDescriptorImageInfo imageInfo{};
-            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfo.imageView = textureImageView;
-            imageInfo.sampler = textureSampler;
+                VkDescriptorImageInfo imageInfo{}; // NOTE: CURRENTLY ALL OBJECTS HAVE THE SAME TEXTURE, WHICH ALSO IS NOT USED
+                imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                imageInfo.imageView = textureImageView;
+                imageInfo.sampler = textureSampler;
 
-            std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+                std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
-            descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[0].dstSet = descriptorSets[i];
-            descriptorWrites[0].dstBinding = 0;
-            descriptorWrites[0].dstArrayElement = 0;
-            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWrites[0].descriptorCount = 1;
-            descriptorWrites[0].pBufferInfo = &bufferInfo;
+                descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                descriptorWrites[0].dstSet = descriptorSets[i * OBJECT_COUNT + j];
+                descriptorWrites[0].dstBinding = 0;
+                descriptorWrites[0].dstArrayElement = 0;
+                descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                descriptorWrites[0].descriptorCount = 1;
+                descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-            descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[1].dstSet = descriptorSets[i];
-            descriptorWrites[1].dstBinding = 1;
-            descriptorWrites[1].dstArrayElement = 0;
-            descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[1].descriptorCount = 1;
-            descriptorWrites[1].pImageInfo = &imageInfo;
+                descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                descriptorWrites[1].dstSet = descriptorSets[i * OBJECT_COUNT + j];
+                descriptorWrites[1].dstBinding = 1;
+                descriptorWrites[1].dstArrayElement = 0;
+                descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                descriptorWrites[1].descriptorCount = 1;
+                descriptorWrites[1].pImageInfo = &imageInfo;
 
-            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+                vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            }
         }
     }
 
@@ -1384,15 +1401,16 @@ private:
             scissor.extent = swapChainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-            VkBuffer vertexBuffers[] = {vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            for (size_t i = 0; i < vertexBufferVector.size(); i++) {
+                VkBuffer vertexBuffers[] = {vertexBufferVector[i]};
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+                vkCmdBindIndexBuffer(commandBuffer, indexBufferVector[i], 0, VK_INDEX_TYPE_UINT32);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame*OBJECT_COUNT+i], 0, nullptr);
 
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-
-            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+                vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indicesVector[i].size()), 1, 0, 0, 0);
+            }
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -1423,16 +1441,22 @@ private:
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
+        uint32_t pieceId = currentImage%OBJECT_COUNT;
 
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
         rotationAngle += rotateSpeed * delta;
 
+        //glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
+
         UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(3.0f, 3.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 30.0f);
+        glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
+        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.model = moveMatrix * rotationMatrix;
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 3.0f), glm::vec3(-2.0f, -2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
+
         ubo.proj[1][1] *= -1;
 
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1451,7 +1475,10 @@ private:
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
-        updateUniformBuffer(currentFrame);
+        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+            updateUniformBuffer(currentFrame * OBJECT_COUNT + i);
+        }
+
 
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
