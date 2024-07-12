@@ -218,7 +218,8 @@ private:
     uint32_t currentFrame = 0;
 
     // moving related
-    float rotationAngle = 0.0;
+    float cameraRotationAngle = 0.0;
+    glm::vec3 cameraOffset = glm::vec3(0.0f, 0.0f, 0.0f);
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
     float delta = 0.0f;
@@ -1417,15 +1418,18 @@ private:
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
-        rotationAngle += rotateSpeed * delta;
+        cameraRotationAngle += rotateSpeed * delta;
 
-        //glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
+        glm::vec3 cameraPos(6.0f, 6.0f, 10.0f);
+        glm::mat4 cameraRotationMatrix = glm::rotate(glm::mat4(1.0f), cameraRotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::vec4 newCameraPos = cameraRotationMatrix * glm::vec4(cameraPos, 1.0f);
+        glm::vec3 newCameraPos3 = glm::vec3(newCameraPos);
 
         UniformBufferObject ubo{};
         glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
-        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), rotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.model = moveMatrix * rotationMatrix;
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 3.0f), glm::vec3(-2.0f, -2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        
+        ubo.model = moveMatrix;// * rotationMatrix; 
+        ubo.view = glm::lookAt(newCameraPos3, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
         ubo.proj[1][1] *= -1;
 
