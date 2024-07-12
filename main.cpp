@@ -32,9 +32,24 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::vector<std::string> MODEL_PATHS = {"models/pawn.obj", "models/rook.obj", "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/king.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj"};
-const std::vector<std::string> MODEL_NAMES = {"Pawn", "Rook", "Knight", "Bishop", "Queen", "King", "Bishop", "Knight", "Rook"};
-const std::vector<glm::vec3> MODEL_LOCATIONS = {glm::vec3(-2.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f), glm::vec3(-3.5f, -1.5f, 0.0f), glm::vec3(-3.5f, 0.5f, 0.0f), glm::vec3(-3.5f, -0.5f, 0.0f), glm::vec3(-3.5f, 1.5f, 0.0f), glm::vec3(-3.5f, 2.5f, 0.0f), glm::vec3(-3.5f, 3.5f, 0.0f)};
+const std::vector<std::string> MODEL_PATHS = {
+    "models/rook.obj", "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/king.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj",
+    "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", 
+    "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", "models/pawn.obj", 
+    "models/rook.obj", "models/knight.obj", "models/bishop.obj", "models/queen.obj", "models/king.obj", "models/bishop.obj", "models/knight.obj", "models/rook.obj"
+};
+const std::vector<std::string> MODEL_NAMES = {
+    "Rook", "Knight", "Bishop", "Queen", "King", "Bishop", "Knight", "Rook",
+    "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", 
+    "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", "Pawn", 
+    "Rook", "Knight", "Bishop", "Queen", "King", "Bishop", "Knight", "Rook"
+};
+const std::vector<glm::vec3> MODEL_LOCATIONS = {
+    glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f), glm::vec3(-3.5f, -1.5f, 0.0f), glm::vec3(-3.5f, 0.5f, 0.0f), glm::vec3(-3.5f, -0.5f, 0.0f), glm::vec3(-3.5f, 1.5f, 0.0f), glm::vec3(-3.5f, 2.5f, 0.0f), glm::vec3(-3.5f, 3.5f, 0.0f),
+    glm::vec3(-2.5f, -3.5f, 0.0f), glm::vec3(-2.5f, -2.5f, 0.0f), glm::vec3(-2.5f, -1.5f, 0.0f), glm::vec3(-2.5f, 0.5f, 0.0f), glm::vec3(-2.5f, -0.5f, 0.0f), glm::vec3(-2.5f, 1.5f, 0.0f), glm::vec3(-2.5f, 2.5f, 0.0f), glm::vec3(-2.5f, 3.5f, 0.0f),
+    glm::vec3(2.5f, -3.5f, 0.0f), glm::vec3(2.5f, -2.5f, 0.0f), glm::vec3(2.5f, -1.5f, 0.0f), glm::vec3(2.5f, 0.5f, 0.0f), glm::vec3(2.5f, -0.5f, 0.0f), glm::vec3(2.5f, 1.5f, 0.0f), glm::vec3(2.5f, 2.5f, 0.0f), glm::vec3(2.5f, 3.5f, 0.0f),
+    glm::vec3(3.5f, -3.5f, 0.0f), glm::vec3(3.5f, -2.5f, 0.0f), glm::vec3(3.5f, -1.5f, 0.0f), glm::vec3(3.5f, 0.5f, 0.0f), glm::vec3(3.5f, -0.5f, 0.0f), glm::vec3(3.5f, 1.5f, 0.0f), glm::vec3(3.5f, 2.5f, 0.0f), glm::vec3(3.5f, 3.5f, 0.0f)
+};
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const size_t OBJECT_COUNT = MODEL_PATHS.size();
@@ -149,6 +164,7 @@ struct ChessPiece {
     std::string name;
     uint32_t index;
     glm::vec3 position;
+    bool colorWhite;
 };
 
 class HelloTriangleApplication {
@@ -1060,6 +1076,7 @@ private:
             chessPieces[i].position = MODEL_LOCATIONS[i];
             chessPieces[i].index = i;
             chessPieces[i].name = i;
+            chessPieces[i].colorWhite = i < 16;
 
             tinyobj::attrib_t attrib;
             std::vector<tinyobj::shape_t> shapes;
@@ -1086,8 +1103,12 @@ private:
                         attrib.texcoords[2 * index.texcoord_index + 0],
                         1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                     };
-
-                    vertex.color = {1.0f, 1.0f, 1.0f};
+                    if (chessPieces[i].colorWhite) {
+                        vertex.color = {0.91f, 0.84f, 0.75f};
+                    }
+                    else {
+                        vertex.color = {0.18f, 0.16f, 0.14f};
+                    }
 
                     vertex.normal = {
                         attrib.normals[3 * index.normal_index + 0],
