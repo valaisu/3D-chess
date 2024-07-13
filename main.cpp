@@ -283,17 +283,38 @@ private:
         app->framebufferResized = true;
     }
 
-    void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            std::cout << "Mouse clicked at: (" << xpos << ", " << ypos << ")" << std::endl;
-            float ndcX = (2.0f*xpos) / WIDTH - 1.0f;
-            float ndcY = (2.0f*ypos) / HEIGHT - 1.0f;
-            std::cout << "Aka: (" << ndcX << ", " << ndcY << ")" << std::endl;
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
 
-        }
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+
+        
+        float ndcX = (2.0f * xpos) / width - 1.0f;
+        float ndcY = 1.0f - (2.0f * ypos) / height;
+
+        glm::vec4 ndcCoords(ndcX, ndcY, -1.0f, 1.0f); // not sure about the 3rd member
+
+        // Camera Space
+        projMatrix[1][1] *= -1; // THIS IS CRUCIAL
+        glm::mat4 invProjMatrix = glm::inverse(projMatrix);
+        projMatrix[1][1] *= -1;
+        glm::vec4 cameraSpaceCoords = invProjMatrix * ndcCoords;
+        cameraSpaceCoords /= cameraSpaceCoords.w;
+
+        // World Space
+        glm::mat4 invViewMatrix = glm::inverse(viewMatrix);
+        glm::vec4 worldSpaceCoords = invViewMatrix * glm::vec4(cameraSpaceCoords.x, cameraSpaceCoords.y, cameraSpaceCoords.z, 0.0f);
+        glm::vec3 rayDirection = glm::normalize(glm::vec3(worldSpaceCoords));
+
+        float multiplier = -cameraPosition.z / rayDirection.z;
+        glm::vec3 intersection = cameraPosition + multiplier * rayDirection;
+
+        std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
     }
+}
 
     void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
         if (action == GLFW_PRESS) {
@@ -1471,10 +1492,9 @@ private:
         UniformBufferObject ubo{};
         glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
         
-        ubo.model = moveMatrix;// * rotationMatrix; 
+        ubo.model = moveMatrix;// * rotationMatrix; // if we want to rotate pieces around their z
         ubo.view = viewMatrix;
         ubo.proj = projMatrix;
-        ubo.proj[1][1] *= -1;
 
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
@@ -1489,8 +1509,9 @@ private:
         glm::vec4 newCameraPos = cameraRotationMatrix * glm::vec4(cameraPositionOriginal, 1.0f);
         cameraPosition = glm::vec3(newCameraPos);
 
-        viewMatrix = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        viewMatrix = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         projMatrix = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
+        projMatrix[1][1] *= -1;
     }
 
     void drawFrame() {
@@ -1510,7 +1531,6 @@ private:
         for (size_t i = 0; i < OBJECT_COUNT; i++) {
             updateUniformBuffer(currentFrame * OBJECT_COUNT + i);
         }
-
 
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
