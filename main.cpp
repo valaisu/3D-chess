@@ -28,6 +28,7 @@
 #include <optional>
 #include <set>
 #include <unordered_map>
+#include <map>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -47,12 +48,38 @@ const std::vector<std::string> MODEL_NAMES = {
     "Light squares", "Dark squares"
 };
 const std::vector<glm::vec3> MODEL_LOCATIONS = {
-    glm::vec3(-3.5f, -3.5f, 0.0f), glm::vec3(-3.5f, -2.5f, 0.0f), glm::vec3(-3.5f, -1.5f, 0.0f), glm::vec3(-3.5f, 0.5f, 0.0f), glm::vec3(-3.5f, -0.5f, 0.0f), glm::vec3(-3.5f, 1.5f, 0.0f), glm::vec3(-3.5f, 2.5f, 0.0f), glm::vec3(-3.5f, 3.5f, 0.0f),
-    glm::vec3(-2.5f, -3.5f, 0.0f), glm::vec3(-2.5f, -2.5f, 0.0f), glm::vec3(-2.5f, -1.5f, 0.0f), glm::vec3(-2.5f, 0.5f, 0.0f), glm::vec3(-2.5f, -0.5f, 0.0f), glm::vec3(-2.5f, 1.5f, 0.0f), glm::vec3(-2.5f, 2.5f, 0.0f), glm::vec3(-2.5f, 3.5f, 0.0f),
-    glm::vec3(2.5f, -3.5f, 0.0f), glm::vec3(2.5f, -2.5f, 0.0f), glm::vec3(2.5f, -1.5f, 0.0f), glm::vec3(2.5f, 0.5f, 0.0f), glm::vec3(2.5f, -0.5f, 0.0f), glm::vec3(2.5f, 1.5f, 0.0f), glm::vec3(2.5f, 2.5f, 0.0f), glm::vec3(2.5f, 3.5f, 0.0f),
-    glm::vec3(3.5f, -3.5f, 0.0f), glm::vec3(3.5f, -2.5f, 0.0f), glm::vec3(3.5f, -1.5f, 0.0f), glm::vec3(3.5f, 0.5f, 0.0f), glm::vec3(3.5f, -0.5f, 0.0f), glm::vec3(3.5f, 1.5f, 0.0f), glm::vec3(3.5f, 2.5f, 0.0f), glm::vec3(3.5f, 3.5f, 0.0f),
-    glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f)
+    glm::vec3(1.0f, 8.0f, 0.0f), glm::vec3(1.0f, 7.0f, 0.0f), glm::vec3(1.0f, 6.0f, 0.0f), glm::vec3(1.0f, 5.0f, 0.0f), glm::vec3(1.0f, 4.0f, 0.0f), glm::vec3(1.0f, 3.0f, 0.0f), glm::vec3(1.0f, 2.0f, 0.0f), glm::vec3(1.0f, 1.0f, 0.0f),
+    glm::vec3(2.0f, 8.0f, 0.0f), glm::vec3(2.0f, 7.0f, 0.0f), glm::vec3(2.0f, 6.0f, 0.0f), glm::vec3(2.0f, 5.0f, 0.0f), glm::vec3(2.0f, 4.0f, 0.0f), glm::vec3(2.0f, 3.0f, 0.0f), glm::vec3(2.0f, 2.0f, 0.0f), glm::vec3(2.0f, 1.0f, 0.0f),
+    glm::vec3(7.0f, 8.0f, 0.0f), glm::vec3(7.0f, 7.0f, 0.0f), glm::vec3(7.0f, 6.0f, 0.0f), glm::vec3(7.0f, 5.0f, 0.0f), glm::vec3(7.0f, 4.0f, 0.0f), glm::vec3(7.0f, 3.0f, 0.0f), glm::vec3(7.0f, 2.0f, 0.0f), glm::vec3(7.0f, 1.0f, 0.0f),
+    glm::vec3(8.0f, 8.0f, 0.0f), glm::vec3(8.0f, 7.0f, 0.0f), glm::vec3(8.0f, 6.0f, 0.0f), glm::vec3(8.0f, 5.0f, 0.0f), glm::vec3(8.0f, 4.0f, 0.0f), glm::vec3(8.0f, 3.0f, 0.0f), glm::vec3(8.0f, 2.0f, 0.0f), glm::vec3(8.0f, 1.0f, 0.0f),
+    glm::vec3(4.5f, 4.5f, 0.0f), glm::vec3(4.5f, 4.5f, 0.0f)
 };
+
+// TODO: move this to another file
+struct BoardLocation {
+    int boardCoordNum;
+    int boardCoordChar; // int despite name, 1 -> a, 2 -> b ...
+
+    BoardLocation(int x, int y) : boardCoordNum(x), boardCoordChar(y) {}
+
+    bool operator==(const BoardLocation& other) const {
+        return (boardCoordNum == other.boardCoordNum && boardCoordChar == other.boardCoordChar);
+    }
+
+    // this is needed for map
+    bool operator<(const BoardLocation& other) const {
+        return (boardCoordNum*8+boardCoordChar < other.boardCoordNum*8+other.boardCoordChar);
+    }
+};
+
+// chess coords start from a1, thus this format
+std::vector<BoardLocation> INITIAL_COORDS = {
+    BoardLocation(0, 0), BoardLocation(0, 1), BoardLocation(0, 2), BoardLocation(0, 3), BoardLocation(0, 4), BoardLocation(0, 5), BoardLocation(0, 6), BoardLocation(0, 7),
+    BoardLocation(1, 0), BoardLocation(1, 1), BoardLocation(1, 2), BoardLocation(1, 3), BoardLocation(1, 4), BoardLocation(1, 5), BoardLocation(1, 6), BoardLocation(1, 7),
+    BoardLocation(6, 0), BoardLocation(6, 1), BoardLocation(6, 2), BoardLocation(6, 3), BoardLocation(6, 4), BoardLocation(6, 5), BoardLocation(6, 6), BoardLocation(6, 7),
+    BoardLocation(7, 0), BoardLocation(7, 1), BoardLocation(7, 2), BoardLocation(7, 3), BoardLocation(7, 4), BoardLocation(7, 5), BoardLocation(7, 6), BoardLocation(7, 7)
+};
+std::map<BoardLocation, glm::vec3> coordsToLocation;
 
 const std::string TEXTURE_PATH = "textures/viking_room.png"; // NOTE: this is not currently in use
 
@@ -164,16 +191,27 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
+
+
 struct ChessPiece {
     std::string name;
     uint32_t index;
-    glm::vec3 position;
+    glm::vec3 position; // location in space
+    BoardLocation coords; // location in board coordinates
     bool colorWhite;
+
+    // default
+    ChessPiece() : name(""), index(0), position(0.0f, 0.0f, 0.0f), coords(BoardLocation(0, 0)), colorWhite(false) {}
+
+    ChessPiece(std::string name, uint32_t index, glm::vec3 position, BoardLocation coords, bool colorWhite) :
+        name(name), index(index), position(position), coords(coords), colorWhite(colorWhite) {}
 };
+
 
 class HelloTriangleApplication {
 public:
     void run() {
+        initBoard();
         initWindow();
         initVulkan();
         mainLoop();
@@ -239,13 +277,18 @@ private:
 
     // moving related
     float cameraRotationAngle = 0.0;
-    glm::vec3 cameraPositionOriginal = glm::vec3(6.0f, 6.0f, 10.0f);
-    glm::vec3 cameraPosition = glm::vec3(6.0f, 6.0f, 10.0f);
+    glm::vec3 cameraTarget = glm::vec3(4.5f, 4.5f, 0.0f);
+    glm::vec3 cameraDistance = glm::vec3(6.0f, 6.0f, 10.0f);
+    glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
     float delta = 0.0f;
 
     float rotateSpeed = 0.0f;
+
+    // previous click
+    BoardLocation prevClick = BoardLocation(0, 0);
+    bool prevClickPiece = false;
 
     // mesh related
     std::vector<ChessPiece> chessPieces;
@@ -253,10 +296,17 @@ private:
     // UBO 
     glm::mat4 viewMatrix;// = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 projMatrix;// = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
-    //        ubo.view = glm::lookAt(newCameraPos3, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    //    ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
 
     bool framebufferResized = false;
+
+    void initBoard() {
+        // Chess board coordinates consist of a number and a letter
+        for (int num = 0; num < 8; num++) {
+            for (int letter = 0; letter < 8; letter++) {
+                coordsToLocation[BoardLocation(num, letter)] = glm::vec3(float(num+1), 8.0f - float(letter), 0.0f);
+            }
+        }
+    }
 
     void initWindow() {
         glfwInit();
@@ -288,12 +338,8 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
 
-        int width, height;
-        glfwGetWindowSize(window, &width, &height);
-
-        
-        float ndcX = (2.0f * xpos) / width - 1.0f;
-        float ndcY = 1.0f - (2.0f * ypos) / height;
+        float ndcX = (2.0f * xpos) / WIDTH - 1.0f;
+        float ndcY = 1.0f - (2.0f * ypos) / HEIGHT;
 
         glm::vec4 ndcCoords(ndcX, ndcY, -1.0f, 1.0f); // not sure about the 3rd member
 
@@ -313,6 +359,22 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         glm::vec3 intersection = cameraPosition + multiplier * rayDirection;
 
         std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
+        int boardNum = int(intersection.x-0.5f);
+        int boardLetter = int(9.0f-intersection.y-0.5f);
+        BoardLocation click = BoardLocation(boardNum, boardLetter);
+
+        printf("Prev: %d %d, This: %d %d \n", prevClick.boardCoordNum, prevClick.boardCoordChar, click.boardCoordNum, click.boardCoordChar);
+        // check if this is a move
+        for (size_t i = 0; i < 32; i++) {
+            if (chessPieces[i].coords == prevClick) {
+                chessPieces[i].coords = click;
+                chessPieces[i].position = coordsToLocation[click];
+                // also check here if a piece was eaten
+                prevClick = BoardLocation(-1, -1);
+                return;
+            }
+        }
+        prevClick = click;
     }
 }
 
@@ -1125,6 +1187,10 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
             chessPieces[i].index = i;
             chessPieces[i].name = i;
             chessPieces[i].colorWhite = i < 16;
+            if (i < 32) {
+                chessPieces[i].coords = INITIAL_COORDS[i];
+                printf("(%d %d) (%f %f) \n", INITIAL_COORDS[i].boardCoordNum, INITIAL_COORDS[i].boardCoordChar, MODEL_LOCATIONS[i].x, MODEL_LOCATIONS[i].y);
+            }
             // the board objects are hanlded a bit weirdly here but it does not cause problems in the program
 
             tinyobj::attrib_t attrib;
@@ -1154,9 +1220,9 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
                     };
 
                     if (chessPieces[i].index < 16) {
-                        vertex.color = {0.91f, 0.84f, 0.75f};
+                        vertex.color = {0.91f, 0.84f, 0.75f}; // beige
                     } else if (chessPieces[i].index < 32) {
-                        vertex.color = {0.18f, 0.16f, 0.14f};
+                        vertex.color = {0.18f, 0.16f, 0.14f}; // ebony
                     } else if (chessPieces[i].index < 33) {
                         vertex.color = {0.95f, 0.95f, 0.95f};
                     } else {
@@ -1503,14 +1569,16 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
-        cameraRotationAngle += rotateSpeed * delta;
+        cameraRotationAngle += rotateSpeed * delta * 20;
 
-        glm::mat4 cameraRotationMatrix = glm::rotate(glm::mat4(1.0f), cameraRotationAngle * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        glm::vec4 newCameraPos = cameraRotationMatrix * glm::vec4(cameraPositionOriginal, 1.0f);
-        cameraPosition = glm::vec3(newCameraPos);
+        glm::vec4 offset(cameraDistance, 0.0f);
 
-        viewMatrix = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        projMatrix = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
+        glm::mat4 cameraRotationMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(cameraRotationAngle), glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::vec3 cameraOffset = glm::vec3(cameraRotationMatrix * offset);
+        cameraPosition = cameraTarget + cameraOffset;
+
+        viewMatrix = glm::lookAt(cameraPosition, cameraTarget, glm::vec3(0.0f, 0.0f, 1.0f));
+        projMatrix = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 20.0f);
         projMatrix[1][1] *= -1;
     }
 
