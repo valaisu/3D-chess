@@ -35,11 +35,14 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-
+const glm::vec3 whitePiece(0.91f, 0.84f, 0.75f);
+const glm::vec3 blackPiece(0.18f, 0.16f, 0.14f);
+const glm::vec3 whiteSquare(0.95f, 0.95f, 0.95f);
+const glm::vec3 blackSquare(0.05f, 0.05f, 0.05f);
 
 const std::string TEXTURE_PATH = "textures/viking_room.png"; // NOTE: this is not currently in use
 
-const size_t OBJECT_COUNT = MODEL_PATHS.size();
+//const size_t OBJECT_COUNT = MODEL_PATHS.size();
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validationLayers = {
@@ -151,16 +154,17 @@ struct UniformBufferObject {
 
 struct ChessPiece {
     std::string name;
-    uint32_t index;
+    std::vector<Vertex>* mesh;
+    std::vector<uint32_t>* indices;
     glm::vec3 position; // location in space
     BoardLocation coords; // location in board coordinates
     bool colorWhite;
 
     // default
-    ChessPiece() : name(""), index(0), position(0.0f, 0.0f, 0.0f), coords(BoardLocation(0, 0)), colorWhite(false) {}
+    ChessPiece() : name(""), mesh(nullptr), indices(nullptr), position(0.0f, 0.0f, 0.0f), coords(BoardLocation(0, 0)), colorWhite(false) {}
 
-    ChessPiece(std::string name, uint32_t index, glm::vec3 position, BoardLocation coords, bool colorWhite) :
-        name(name), index(index), position(position), coords(coords), colorWhite(colorWhite) {}
+    ChessPiece(std::string name, std::vector<Vertex>* mesh, std::vector<uint32_t>* indices, glm::vec3 position, BoardLocation coords, bool colorWhite) :
+        name(name), mesh(mesh), indices(indices), position(position), coords(coords), colorWhite(colorWhite) {}
     
     void getEaten() { // more elegant solution would be to remove the buffer where this resides but oh well
         coords = BoardLocation(-1, -1);
@@ -256,6 +260,8 @@ private:
 
     std::map<BoardLocation, glm::vec3> coordsToLocation; // currently not in use
 
+    uint32_t totalObjects = 32 + 2;
+
     // UBO 
     glm::mat4 viewMatrix;
     glm::mat4 projMatrix;
@@ -341,7 +347,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
             prevClick = BoardLocation(-1, -1);
             return;
         }
-        
+
         ChessPiece* start = coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum];
         ChessPiece* dest = coordsToPiece[boardLetter][boardNum];
 
@@ -456,7 +462,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT * totalObjects; i++) {
             vkDestroyBuffer(device, uniformBuffers[i], nullptr);
             vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
         }
@@ -471,7 +477,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+        for (size_t i = 0; i < totalObjects; i++) {
             vkDestroyBuffer(device, indexBufferVector[i], nullptr);
             vkFreeMemory(device, indexBufferMemoryVector[i], nullptr);
 
@@ -1172,87 +1178,130 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     }
 
     void loadModels() {
+        indicesVector.resize(totalObjects);
+        verticesVector.resize(totalObjects);
 
-        indicesVector.resize(OBJECT_COUNT);
-        verticesVector.resize(OBJECT_COUNT);
-
-        chessPieces.resize(OBJECT_COUNT);
+        chessPieces.resize(totalObjects);
         coordsToPiece.resize(8);
         for (auto& row : coordsToPiece) {
             row.resize(8);
         }
 
-        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+        for (size_t i = 0; i < totalObjects; i++) {
 
             chessPieces[i].position = MODEL_LOCATIONS[i];
-            chessPieces[i].index = i;
-            chessPieces[i].name = i;
-            chessPieces[i].colorWhite = i < 16;
-            if (i < 32) {
+            chessPieces[i].mesh = &verticesVector[i];
+            chessPieces[i].indices = &indicesVector[i];
+            chessPieces[i].name = MODEL_NAMES[i];
+            chessPieces[i].colorWhite = i < 18;
+            if (i > 1) { 
+                // The board objects (2 first) are handled as chess pieces for now
                 chessPieces[i].coords = INITIAL_COORDS[i];
                 coordsToPiece[INITIAL_COORDS[i].boardCoordChar][INITIAL_COORDS[i].boardCoordNum] = &chessPieces[i];
-                //printf("(%d %d) (%f %f) \n", INITIAL_COORDS[i].boardCoordNum, INITIAL_COORDS[i].boardCoordChar, MODEL_LOCATIONS[i].x, MODEL_LOCATIONS[i].y);
             }
-            // the board objects were hanlded a bit weirdly here but it does not cause problems in the program
-
-            tinyobj::attrib_t attrib;
-            std::vector<tinyobj::shape_t> shapes;
-            std::vector<tinyobj::material_t> materials;
-            std::string warn, err;
-
-            if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATHS[i].c_str())) {
-                throw std::runtime_error(warn + err);
-            }
-
-            std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-
-            for (const auto& shape : shapes) {
-                for (const auto& index : shape.mesh.indices) {
-                    Vertex vertex{};
-
-                    vertex.pos = {
-                        attrib.vertices[3 * index.vertex_index + 0],
-                        attrib.vertices[3 * index.vertex_index + 1],
-                        attrib.vertices[3 * index.vertex_index + 2]
-                    };
-
-                    vertex.texCoord = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                    };
-
-                    if (chessPieces[i].index < 16) {
-                        vertex.color = {0.91f, 0.84f, 0.75f}; // beige = white pieces
-                    } else if (chessPieces[i].index < 32) {
-                        vertex.color = {0.18f, 0.16f, 0.14f}; // ebony = black pieces
-                    } else if (chessPieces[i].index < 33) {
-                        vertex.color = {0.95f, 0.95f, 0.95f}; // white squares
-                    } else {
-                        vertex.color = {0.05f, 0.05f, 0.05f}; // black squares
-                    }
-
-                    vertex.normal = {
-                        attrib.normals[3 * index.normal_index + 0],
-                        attrib.normals[3 * index.normal_index + 1],
-                        attrib.normals[3 * index.normal_index + 2]
-                    };
-
-                    if (uniqueVertices.count(vertex) == 0) {
-                        uniqueVertices[vertex] = static_cast<uint32_t>(verticesVector[i].size());
-                        verticesVector[i].push_back(vertex);
-                    }
-
-                    indicesVector[i].push_back(uniqueVertices[vertex]);
-                }
+            if (i == 0) {
+                loadModel(MODEL_PATHS[i], whiteSquare, i);
+            } else if (i == 1) {
+                loadModel(MODEL_PATHS[i], blackSquare, i);
+            } else if (i < 18) {
+                loadModel(MODEL_PATHS[i], whitePiece, i);
+            } else {
+                loadModel(MODEL_PATHS[i], blackPiece, i);
             }
         }
     }
 
-    void createVertexBuffers() {
-        vertexBufferVector.resize(OBJECT_COUNT);
-        vertexBufferMemoryVector.resize(OBJECT_COUNT);
 
-        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+    void loadModel(std::string path, glm::vec3 color, uint32_t modelIndex) {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+        std::string warn, err;
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str())) {
+            throw std::runtime_error(warn + err);
+        }
+
+        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+        for (const auto& shape : shapes) {
+            for (const auto& index : shape.mesh.indices) {
+                Vertex vertex{};
+
+                vertex.pos = {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2]
+                };
+
+                vertex.texCoord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+
+                vertex.color = color;
+
+                vertex.normal = {
+                    attrib.normals[3 * index.normal_index + 0],
+                    attrib.normals[3 * index.normal_index + 1],
+                    attrib.normals[3 * index.normal_index + 2]
+                };
+
+                if (uniqueVertices.count(vertex) == 0) {
+                    uniqueVertices[vertex] = static_cast<uint32_t>(verticesVector[modelIndex].size());
+                    verticesVector[modelIndex].push_back(vertex);
+                }
+
+                indicesVector[modelIndex].push_back(uniqueVertices[vertex]);
+            }
+        }
+    }
+
+    void loadChessPiece(BoardLocation coords, std::string modelPath, bool isWhite) {
+
+    }
+
+    void destroyPiece() {
+        // resize index and vertex buffers
+    }
+
+    void createPiece(BoardLocation loc, std::string modelPath, bool isWhite) {
+        // here probably should be some check preventing us from doing this mid frame
+        
+        // resize stuff
+        totalObjects += 1;
+        indexBufferVector.resize(totalObjects);
+        indexBufferMemoryVector.resize(totalObjects);
+        indicesVector.resize(totalObjects);
+        verticesVector.resize(totalObjects);
+
+        // create the buffer
+        int i = totalObjects - 1;
+        VkDeviceSize bufferSize = sizeof(indicesVector[i][0]) * indicesVector[i].size();
+
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+        void* data;
+        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+            memcpy(data, indicesVector[i].data(), (size_t) bufferSize);
+        vkUnmapMemory(device, stagingBufferMemory);
+
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferVector[i], indexBufferMemoryVector[i]);
+
+        copyBuffer(stagingBuffer, indexBufferVector[i], bufferSize);
+
+        vkDestroyBuffer(device, stagingBuffer, nullptr);
+        vkFreeMemory(device, stagingBufferMemory, nullptr);
+
+    }
+
+    void createVertexBuffers() {
+        vertexBufferVector.resize(totalObjects);
+        vertexBufferMemoryVector.resize(totalObjects);
+
+        for (size_t i = 0; i < totalObjects; i++) {
             VkDeviceSize bufferSize = sizeof(verticesVector[i][0]) * verticesVector[i].size();
 
             VkBuffer stagingBuffer;
@@ -1274,10 +1323,10 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     }
 
     void createIndexBuffers() {
-        indexBufferVector.resize(OBJECT_COUNT);
-        indexBufferMemoryVector.resize(OBJECT_COUNT);
+        indexBufferVector.resize(totalObjects);
+        indexBufferMemoryVector.resize(totalObjects);
 
-        for (size_t i = 0; i < OBJECT_COUNT; i++) {
+        for (size_t i = 0; i < totalObjects; i++) {
             VkDeviceSize bufferSize = sizeof(indicesVector[i][0]) * indicesVector[i].size();
 
             VkBuffer stagingBuffer;
@@ -1301,12 +1350,12 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     void createUniformBuffers() {
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
-        uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
-        uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
-        uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT * totalObjects);
+        uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT * totalObjects);
+        uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
         // UBOs of the same frame are next to each other
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT * totalObjects; i++) {
             createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
 
             vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
@@ -1316,15 +1365,15 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     void createDescriptorPool() {
         std::array<VkDescriptorPoolSize, 2> poolSizes{};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
         if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
@@ -1332,22 +1381,22 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     }
 
     void createDescriptorSets() {
-        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT, descriptorSetLayout);
+        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * totalObjects, descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = descriptorPool;
-        allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
         allocInfo.pSetLayouts = layouts.data();
 
-        descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * OBJECT_COUNT);
+        descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * totalObjects);
         if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            for (size_t j = 0; j < OBJECT_COUNT; j++) {
+            for (size_t j = 0; j < totalObjects; j++) {
                 VkDescriptorBufferInfo bufferInfo{};
-                bufferInfo.buffer = uniformBuffers[i * OBJECT_COUNT + j];
+                bufferInfo.buffer = uniformBuffers[i * totalObjects + j];
                 bufferInfo.offset = 0;
                 bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -1359,7 +1408,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
                 std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
                 descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                descriptorWrites[0].dstSet = descriptorSets[i * OBJECT_COUNT + j];
+                descriptorWrites[0].dstSet = descriptorSets[i * totalObjects + j];
                 descriptorWrites[0].dstBinding = 0;
                 descriptorWrites[0].dstArrayElement = 0;
                 descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1367,7 +1416,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
                 descriptorWrites[0].pBufferInfo = &bufferInfo;
 
                 descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                descriptorWrites[1].dstSet = descriptorSets[i * OBJECT_COUNT + j];
+                descriptorWrites[1].dstSet = descriptorSets[i * totalObjects + j];
                 descriptorWrites[1].dstBinding = 1;
                 descriptorWrites[1].dstArrayElement = 0;
                 descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1521,7 +1570,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
                 vkCmdBindIndexBuffer(commandBuffer, indexBufferVector[i], 0, VK_INDEX_TYPE_UINT32);
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame*OBJECT_COUNT+i], 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame*totalObjects+i], 0, nullptr);
 
                 vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indicesVector[i].size()), 1, 0, 0, 0);
             }
@@ -1555,7 +1604,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     }
 
     void updateUniformBuffer(uint32_t currentImage) {
-        uint32_t pieceId = currentImage%OBJECT_COUNT;
+        uint32_t pieceId = currentImage%totalObjects;
 
         UniformBufferObject ubo{};
         glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
@@ -1598,8 +1647,8 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         }
 
         updateCameraPosition();
-        for (size_t i = 0; i < OBJECT_COUNT; i++) {
-            updateUniformBuffer(currentFrame * OBJECT_COUNT + i);
+        for (size_t i = 0; i < totalObjects; i++) {
+            updateUniformBuffer(currentFrame * totalObjects + i);
         }
 
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
