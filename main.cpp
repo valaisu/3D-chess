@@ -205,6 +205,11 @@ struct ChessPiece {
 
     ChessPiece(std::string name, uint32_t index, glm::vec3 position, BoardLocation coords, bool colorWhite) :
         name(name), index(index), position(position), coords(coords), colorWhite(colorWhite) {}
+    
+    void getEaten() { // more elegant solution would be to remove the buffer where this resides but oh well
+        coords = BoardLocation(-1, -1);
+        position = glm::vec3(0.0f, 0.0f, 30.0f);
+    }
 };
 
 
@@ -275,27 +280,28 @@ private:
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
 
-    // moving related
+    // Camera related
     float cameraRotationAngle = 0.0;
     glm::vec3 cameraTarget = glm::vec3(4.5f, 4.5f, 0.0f);
     glm::vec3 cameraDistance = glm::vec3(6.0f, 6.0f, 10.0f);
-    glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraPosition;// = glm::vec3(0.0f, 0.0f, 0.0f);
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
     float delta = 0.0f;
 
     float rotateSpeed = 0.0f;
 
-    // previous click
-    BoardLocation prevClick = BoardLocation(0, 0);
+    // Board related
+    BoardLocation prevClick = BoardLocation(-1, -1);
     bool prevClickPiece = false;
 
-    // mesh related
     std::vector<ChessPiece> chessPieces;
+    //std::map<BoardLocation, ChessPiece> coordsToPiece;
+    std::vector<std::vector<ChessPiece*>> coordsToPiece;
 
     // UBO 
-    glm::mat4 viewMatrix;// = glm::lookAt(cameraPosition, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::mat4 projMatrix;// = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 20.0f);
+    glm::mat4 viewMatrix;
+    glm::mat4 projMatrix;
 
     bool framebufferResized = false;
 
@@ -363,18 +369,52 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         int boardLetter = int(9.0f-intersection.y-0.5f);
         BoardLocation click = BoardLocation(boardNum, boardLetter);
 
-        printf("Prev: %d %d, This: %d %d \n", prevClick.boardCoordNum, prevClick.boardCoordChar, click.boardCoordNum, click.boardCoordChar);
-        // check if this is a move
-        for (size_t i = 0; i < 32; i++) {
-            if (chessPieces[i].coords == prevClick) {
-                chessPieces[i].coords = click;
-                chessPieces[i].position = coordsToLocation[click];
-                // also check here if a piece was eaten
-                prevClick = BoardLocation(-1, -1);
-                return;
-            }
+        // Coordinates found, now execute potential move
+
+        if ((0 > prevClick.boardCoordChar || 7 < prevClick.boardCoordChar) ||
+            (0 > prevClick.boardCoordNum  || 7 < prevClick.boardCoordNum )) {
+            // previous click not on board
+            prevClick = click;
+            return;
         }
-        prevClick = click;
+
+        if ((0 > click.boardCoordChar || 7 < click.boardCoordChar) ||
+            (0 > click.boardCoordNum  || 7 < click.boardCoordNum )) {
+            // new click not on board
+            prevClick = BoardLocation(-1, -1);
+            return;
+        }
+        
+        ChessPiece* start = coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum];
+        ChessPiece* dest = coordsToPiece[boardLetter][boardNum];
+
+        if (start != nullptr) {
+            // start has no piece -> not a move
+            prevClick = click;
+            return;
+        }
+
+        if (dest != nullptr) {
+            if (dest->colorWhite != start->colorWhite) {
+                // eat enemy piece
+                start->coords = click;
+                start->position = coordsToLocation[click];
+                dest->getEaten();
+                coordsToPiece[click.boardCoordChar][click.boardCoordNum] = start;
+                coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum] = nullptr;
+                prevClick = BoardLocation(-1, -1);
+            } else {
+                // trying to eat own piece
+                prevClick = click;
+            }
+        } else {
+            // move piece
+            start->coords = click;
+            start->position = coordsToLocation[click];
+            coordsToPiece[click.boardCoordChar][click.boardCoordNum] = start;
+            coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum] = nullptr;
+            prevClick = BoardLocation(-1, -1);
+        }
     }
 }
 
@@ -1180,6 +1220,10 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         verticesVector.resize(OBJECT_COUNT);
 
         chessPieces.resize(OBJECT_COUNT);
+        coordsToPiece.resize(8);
+        for (auto& row : coordsToPiece) {
+            row.resize(8);
+        }
 
         for (size_t i = 0; i < OBJECT_COUNT; i++) {
 
@@ -1189,9 +1233,10 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
             chessPieces[i].colorWhite = i < 16;
             if (i < 32) {
                 chessPieces[i].coords = INITIAL_COORDS[i];
-                printf("(%d %d) (%f %f) \n", INITIAL_COORDS[i].boardCoordNum, INITIAL_COORDS[i].boardCoordChar, MODEL_LOCATIONS[i].x, MODEL_LOCATIONS[i].y);
+                coordsToPiece[INITIAL_COORDS[i].boardCoordChar][INITIAL_COORDS[i].boardCoordNum] = &chessPieces[i];
+                //printf("(%d %d) (%f %f) \n", INITIAL_COORDS[i].boardCoordNum, INITIAL_COORDS[i].boardCoordChar, MODEL_LOCATIONS[i].x, MODEL_LOCATIONS[i].y);
             }
-            // the board objects are hanlded a bit weirdly here but it does not cause problems in the program
+            // the board objects were hanlded a bit weirdly here but it does not cause problems in the program
 
             tinyobj::attrib_t attrib;
             std::vector<tinyobj::shape_t> shapes;
@@ -1220,13 +1265,13 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
                     };
 
                     if (chessPieces[i].index < 16) {
-                        vertex.color = {0.91f, 0.84f, 0.75f}; // beige
+                        vertex.color = {0.91f, 0.84f, 0.75f}; // beige = white pieces
                     } else if (chessPieces[i].index < 32) {
-                        vertex.color = {0.18f, 0.16f, 0.14f}; // ebony
+                        vertex.color = {0.18f, 0.16f, 0.14f}; // ebony = black pieces
                     } else if (chessPieces[i].index < 33) {
-                        vertex.color = {0.95f, 0.95f, 0.95f};
+                        vertex.color = {0.95f, 0.95f, 0.95f}; // white squares
                     } else {
-                        vertex.color = {0.05f, 0.05f, 0.05f};
+                        vertex.color = {0.05f, 0.05f, 0.05f}; // black squares
                     }
 
                     vertex.normal = {
@@ -1569,7 +1614,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         currentFrameTime = std::chrono::high_resolution_clock::now();
         delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
         previousFrameTime = currentFrameTime;
-        cameraRotationAngle += rotateSpeed * delta * 20;
+        cameraRotationAngle += rotateSpeed * delta * 40;
 
         glm::vec4 offset(cameraDistance, 0.0f);
 
