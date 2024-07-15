@@ -31,9 +31,13 @@
 #include <set>
 #include <unordered_map>
 #include <map>
+#include <thread>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
+
+const uint32_t TARGET_FPS = 60;
+const double TARGET_FRAME_DURATION_MS = 1000.0 / TARGET_FPS;
 
 const glm::vec3 whitePiece(0.91f, 0.84f, 0.75f);
 const glm::vec3 blackPiece(0.18f, 0.16f, 0.14f);
@@ -431,8 +435,16 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     
     void mainLoop() {
         while (!glfwWindowShouldClose(window)) {
+            auto frameStart = std::chrono::high_resolution_clock::now();
             glfwPollEvents();
             drawFrame();
+            auto frameEnd = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> frameDuration = frameEnd - frameStart;
+            double remainingTime = TARGET_FRAME_DURATION_MS - frameDuration.count();
+
+            if (remainingTime > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long>(remainingTime)));
+            }
         }
 
         vkDeviceWaitIdle(device);
