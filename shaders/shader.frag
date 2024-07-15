@@ -13,7 +13,11 @@ const vec3 lightColor = vec3(1.0, 1.0, 1.0);
 const vec3 viewPos = vec3(2.0, 2.0, 2.0);
 
 void main() {
-    // use 3 different kinds of light
+    // Color is calculated based on 
+    //  -the angle of the fragment 
+    //  -the viewing direction
+    //  -the original color
+
     float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * lightColor;
 
@@ -29,5 +33,5 @@ void main() {
     vec3 specular = specularStrength * spec * lightColor;
 
     vec3 result = (ambient + diffuse + specular) * fragColor;
-    outColor = vec4(result, 1.0);// * texture(texSampler, fragTexCoord);//texture(texSampler, fragTexCoord);
+    outColor = vec4(result, 1.0); // texture would be used here
 }

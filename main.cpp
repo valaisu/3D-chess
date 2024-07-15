@@ -42,7 +42,6 @@ const glm::vec3 blackSquare(0.05f, 0.05f, 0.05f);
 
 const std::string TEXTURE_PATH = "textures/viking_room.png"; // NOTE: this is not currently in use
 
-//const size_t OBJECT_COUNT = MODEL_PATHS.size();
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validationLayers = {
@@ -152,19 +151,19 @@ struct UniformBufferObject {
 
 
 
+// chessPiece is connected to it's mesh and other representations via 
+// having the same index in respective std::vectors.
 struct ChessPiece {
     std::string name;
-    std::vector<Vertex>* mesh;
-    std::vector<uint32_t>* indices;
     glm::vec3 position; // location in space
     BoardLocation coords; // location in board coordinates
     bool colorWhite;
 
     // default
-    ChessPiece() : name(""), mesh(nullptr), indices(nullptr), position(0.0f, 0.0f, 0.0f), coords(BoardLocation(0, 0)), colorWhite(false) {}
+    ChessPiece() : name(""), position(0.0f, 0.0f, 0.0f), coords(BoardLocation(0, 0)), colorWhite(false) {}
 
     ChessPiece(std::string name, std::vector<Vertex>* mesh, std::vector<uint32_t>* indices, glm::vec3 position, BoardLocation coords, bool colorWhite) :
-        name(name), mesh(mesh), indices(indices), position(position), coords(coords), colorWhite(colorWhite) {}
+        name(name), position(position), coords(coords), colorWhite(colorWhite) {}
     
     void getEaten() { // more elegant solution would be to remove the buffer where this resides but oh well
         coords = BoardLocation(-1, -1);
@@ -1190,8 +1189,6 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         for (size_t i = 0; i < totalObjects; i++) {
 
             chessPieces[i].position = MODEL_LOCATIONS[i];
-            chessPieces[i].mesh = &verticesVector[i];
-            chessPieces[i].indices = &indicesVector[i];
             chessPieces[i].name = MODEL_NAMES[i];
             chessPieces[i].colorWhite = i < 18;
             if (i > 1) { 
@@ -1257,44 +1254,31 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         }
     }
 
-    void loadChessPiece(BoardLocation coords, std::string modelPath, bool isWhite) {
+    void destroyPiece(size_t index) {
+        // vkDeviceWaitIdle(device);
 
-    }
+        // Free and destroy index and memory buffers
 
-    void destroyPiece() {
+        // Edit descriptor sets
+
+        // .erase from chessPieces
+
+        // totalObjects -= 1;
         // resize index and vertex buffers
     }
 
     void createPiece(BoardLocation loc, std::string modelPath, bool isWhite) {
-        // here probably should be some check preventing us from doing this mid frame
-        
-        // resize stuff
-        totalObjects += 1;
-        indexBufferVector.resize(totalObjects);
-        indexBufferMemoryVector.resize(totalObjects);
-        indicesVector.resize(totalObjects);
-        verticesVector.resize(totalObjects);
+        // vkDeviceWaitIdle(device);
 
-        // create the buffer
-        int i = totalObjects - 1;
-        VkDeviceSize bufferSize = sizeof(indicesVector[i][0]) * indicesVector[i].size();
+        // totalObjects += 1;
+        // resize vertex and index buffers and memories
 
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+        // edit descriptor sets
 
-        void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-            memcpy(data, indicesVector[i].data(), (size_t) bufferSize);
-        vkUnmapMemory(device, stagingBufferMemory);
+        // create buffers
+        // like in createIndexBuffers()
 
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferVector[i], indexBufferMemoryVector[i]);
-
-        copyBuffer(stagingBuffer, indexBufferVector[i], bufferSize);
-
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
-
+        // add piece to chessPieces
     }
 
     void createVertexBuffers() {
