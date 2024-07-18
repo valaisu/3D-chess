@@ -15,7 +15,7 @@ The board can be rotated with arrow keys left and right.
 
 # Video demo
 
-[A short video][https://drive.google.com/drive/folders/1pR9qI2WiR7No_k3mUgup00z_79j6vXCs?usp=sharing]
+[A short video](https://drive.google.com/drive/folders/1pR9qI2WiR7No_k3mUgup00z_79j6vXCs?usp=sharing)
 
 # Features
 
