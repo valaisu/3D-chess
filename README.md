@@ -39,6 +39,7 @@ sudo apt install vulkan-tools
 sudo apt install libvulkan-dev
 sudo apt install vulkan-validationlayers-dev spirv-tools
 ```
+If these don't work, check the tutorial website linked earlier for alternatives
 
 **Make**: For compiling the program make is needed, ubuntu should have it by default. To check, you can run
 ```
@@ -51,7 +52,7 @@ sudo apt-get install build-essential
 
 **GLFW**:
 ```
-apt-get install libglfw3-dev
+sudo apt-get install libglfw3-dev
 ```
 
 Also this is needed by GLFW:
@@ -61,7 +62,7 @@ sudo apt install libxxf86vm-dev libxi-dev
 
 **GLM**:
 ```
-apt-get install libglm-dev
+sudo apt-get install libglm-dev
 ```
 
 **glslc**:
@@ -73,10 +74,12 @@ Here ends the summary of 'Vulkan tutorial'-websites linux setup guide
 
 For the next two dependencies, what I did was I cloned the git repositories, and copied the relevant .h file to the root folder of the project. There are more elegant ways to add libraries, but for a small scale project this way seems the easiest.
 
-**stb_image**: clone from [here](https://github.com/nothings/stb)
+Note: only copy the relevant file from the following two:
+
+**stb_image**: clone from [here](https://github.com/nothings/stb), 
 relevant file: stb_image.h
 
-**tinyobjloader**: clone from [here](https://github.com/tinyobjloader/tinyobjloader)
+**tinyobjloader**: clone from [here](https://github.com/tinyobjloader/tinyobjloader), 
 relevant file: tiny_obj_loader.h
 
 ### Running the program: 
