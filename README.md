@@ -16,13 +16,13 @@ If you have not already, clone the project.
 ### Dependencies overview
 
 To run the project, you need to have the following
--Vulkan SDK
--make
--GLFW
--GLM
--glslc
--stb_image
--tinyobjloader
+- Vulkan SDK
+- make
+- GLFW
+- GLM
+- glslc
+- stb_image
+- tinyobjloader
 
 To get the first 5, I have summed up the linux setup guide from '[Vulkan Tutorial](https://vulkan-tutorial.com/Development_environment#page_Linux)'-website. You can also opt to follow that for the first 5 dependencies. 
 
@@ -71,7 +71,7 @@ Then find the file named 'glslc' and copy that to /usr/local/bin
 
 Here ends the summary of 'Vulkan tutorial'-websites linux setup guide
 
-For the next two dependencies, what I did was I cloned the git repositories, and copied the relevant .h file to the root folder of my project. There are more elegant ways to do this, but for a small scale project this way seems the easiest.
+For the next two dependencies, what I did was I cloned the git repositories, and copied the relevant .h file to the root folder of the project. There are more elegant ways to add libraries, but for a small scale project this way seems the easiest.
 
 **stb_image**: clone from [here](https://github.com/nothings/stb)
 relevant file: stb_image.h
