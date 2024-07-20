@@ -33,18 +33,48 @@
 #include <map>
 #include <thread>
 
+
+/* 
+About architecture
+
+these are notes, not the final description
+
+What you see
+    Lets first focus on the things you can see: The chess pieces
+    vector<VertexBuffer>         : The mesh, made of individual vertices
+    vector<ChessPiece>           : Where which piece is
+    Uniform Buffer Objecs (UBOs) : The transformation that move the pieces to where they should be
+
+    Chess pieces and VertexBuffers are connected to each other by sharing the same index. 
+    sidenote: The connection is a bit abstract, there is probably a smarted way to do this.
+
+    UBOs are recreated before each frame.
+
+    The board objects are also treated as chess pieces. They occupy indices 0 and 1 and never move. 
+
+
+Triple buffering
+
+
+Initial setup
+    There is a lot of checking if the system meets the requirements of the program. I probably 
+    won't comment on those parts further.
+
+*/
+
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const uint32_t TARGET_FPS = 60;
 const double TARGET_FRAME_DURATION_MS = 1000.0 / TARGET_FPS;
 
-const glm::vec3 whitePiece(0.91f, 0.84f, 0.75f);
-const glm::vec3 blackPiece(0.18f, 0.16f, 0.14f);
+// Maybe move these 4 to chess.h?
+const glm::vec3 whitePiece(0.84f, 0.66f, 0.46f);
+const glm::vec3 blackPiece(0.24f, 0.19f, 0.18f);
 const glm::vec3 whiteSquare(0.95f, 0.95f, 0.95f);
 const glm::vec3 blackSquare(0.05f, 0.05f, 0.05f);
 
-const std::string TEXTURE_PATH = "textures/empty.png"; // NOTE: this is not currently in use
+const std::string TEXTURE_PATH = "textures/empty.png"; // NOTE: this currently is not in use
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -154,24 +184,24 @@ struct UniformBufferObject {
 };
 
 
-
 // chessPiece is connected to it's mesh and other representations via 
 // having the same index in respective std::vectors.
 struct ChessPiece {
     std::string name;
-    glm::vec3 position; // location in space
-    BoardLocation coords; // location in board coordinates
+    glm::vec3 spatialPosition; // location in space
+    BoardLocation chessCoordinates; // location in board coordinates
     bool colorWhite;
 
     // default
-    ChessPiece() : name(""), position(0.0f, 0.0f, 0.0f), coords(BoardLocation(0, 0)), colorWhite(false) {}
+    ChessPiece() : name(""), spatialPosition(0.0f, 0.0f, 0.0f), chessCoordinates(BoardLocation(0, 0)), colorWhite(false) {}
 
-    ChessPiece(std::string name, std::vector<Vertex>* mesh, std::vector<uint32_t>* indices, glm::vec3 position, BoardLocation coords, bool colorWhite) :
-        name(name), position(position), coords(coords), colorWhite(colorWhite) {}
+    ChessPiece(std::string name, std::vector<Vertex>* mesh, std::vector<uint32_t>* indices, glm::vec3 spatialPosition, BoardLocation chessCoordinates, bool colorWhite) :
+        name(name), spatialPosition(spatialPosition), chessCoordinates(chessCoordinates), colorWhite(colorWhite) {}
     
-    void getEaten() { // more elegant solution would be to remove the buffer where this resides but oh well
-        coords = BoardLocation(-1, -1);
-        position = glm::vec3(0.0f, 0.0f, 30.0f);
+    // for now, when pieces are eaten, they are moved out of field of view and rendering distance
+    void getEaten() {
+        chessCoordinates = BoardLocation(-1, -1);
+        spatialPosition = glm::vec3(0.0f, 0.0f, 30.0f);
     }
 };
 
@@ -244,15 +274,15 @@ private:
     uint32_t currentFrame = 0;
 
     // Camera related
-    float cameraRotationAngle = 0.0;
     glm::vec3 cameraTarget = glm::vec3(4.5f, 4.5f, 0.0f);
-    glm::vec3 cameraDistance = glm::vec3(6.0f, 6.0f, 10.0f);
+    glm::vec3 cameraOffsetFromTarget = glm::vec3(6.0f, 6.0f, 10.0f);
     glm::vec3 cameraPosition;// = glm::vec3(0.0f, 0.0f, 0.0f);
+    float cameraRotationAngle = 0.0;
+    float rotateSpeed = 0.0f;
+    float timeDelta = 0.0f;
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
-    float delta = 0.0f;
-
-    float rotateSpeed = 0.0f;
+    const float CAMERA_ROTATION_SPEED_MAGIC_CONST = 60.0f;
 
     // Board related
     BoardLocation prevClick = BoardLocation(-1, -1);
@@ -261,18 +291,19 @@ private:
     std::vector<ChessPiece> chessPieces;
     std::vector<std::vector<ChessPiece*>> coordsToPiece;
 
-    std::map<BoardLocation, glm::vec3> coordsToLocation; // currently not in use
+    std::map<BoardLocation, glm::vec3> coordsToLocation;
 
-    uint32_t totalObjects = 32 + 2;
+    uint32_t totalObjects = 32 + 2; // Pieces + Board objects
 
     // UBO 
-    glm::mat4 viewMatrix;
-    glm::mat4 projMatrix;
+    glm::mat4 viewMatrix; // same for each UBO
+    glm::mat4 projMatrix; // same for each UBO
 
     bool framebufferResized = false;
 
+    // Fills a map[Board coords -> spatial location]
     void initBoard() {
-        // Chess board coordinates consist of a number and a letter
+        // Chess board coordinates consist of a number and a letter. 
         for (int num = 0; num < 8; num++) {
             for (int letter = 0; letter < 8; letter++) {
                 coordsToLocation[BoardLocation(num, letter)] = glm::vec3(float(num+1), 8.0f - float(letter), 0.0f);
@@ -289,6 +320,8 @@ private:
         glfwSetWindowUserPointer(window, this);
         glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
+
+        // setup event listeners
         glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
             auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
             app->keyCallback(window, key, scancode, action, mods);
@@ -305,85 +338,89 @@ private:
         app->framebufferResized = true;
     }
 
-void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
+    // handles moving pieces
+    void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
 
-        float ndcX = (2.0f * xpos) / WIDTH - 1.0f;
-        float ndcY = 1.0f - (2.0f * ypos) / HEIGHT;
+            // get click coords
+            float ndcX = (2.0f * xpos) / WIDTH - 1.0f;
+            float ndcY = 1.0f - (2.0f * ypos) / HEIGHT;
 
-        glm::vec4 ndcCoords(ndcX, ndcY, -1.0f, 1.0f); // not sure about the 3rd member
+            glm::vec4 ndcCoords(ndcX, ndcY, -1.0f, 1.0f); // not sure about the 3rd member
 
-        // Camera Space
-        projMatrix[1][1] *= -1; // THIS IS CRUCIAL
-        glm::mat4 invProjMatrix = glm::inverse(projMatrix);
-        projMatrix[1][1] *= -1;
-        glm::vec4 cameraSpaceCoords = invProjMatrix * ndcCoords;
-        cameraSpaceCoords /= cameraSpaceCoords.w;
+            // Convert to camera Space
+            projMatrix[1][1] *= -1; // THIS IS CRUCIAL
+            glm::mat4 invProjMatrix = glm::inverse(projMatrix);
+            projMatrix[1][1] *= -1;
+            glm::vec4 cameraSpaceCoords = invProjMatrix * ndcCoords;
+            cameraSpaceCoords /= cameraSpaceCoords.w;
 
-        // World Space
-        glm::mat4 invViewMatrix = glm::inverse(viewMatrix);
-        glm::vec4 worldSpaceCoords = invViewMatrix * glm::vec4(cameraSpaceCoords.x, cameraSpaceCoords.y, cameraSpaceCoords.z, 0.0f);
-        glm::vec3 rayDirection = glm::normalize(glm::vec3(worldSpaceCoords));
+            // Convert to world Space
+            glm::mat4 invViewMatrix = glm::inverse(viewMatrix);
+            glm::vec4 worldSpaceCoords = invViewMatrix * glm::vec4(cameraSpaceCoords.x, cameraSpaceCoords.y, cameraSpaceCoords.z, 0.0f);
+            glm::vec3 rayDirection = glm::normalize(glm::vec3(worldSpaceCoords));
 
-        float multiplier = -cameraPosition.z / rayDirection.z;
-        glm::vec3 intersection = cameraPosition + multiplier * rayDirection;
+            // Project click to z=0 plane
+            float multiplier = -cameraPosition.z / rayDirection.z;
+            glm::vec3 intersection = cameraPosition + multiplier * rayDirection;
 
-        std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
-        int boardNum = int(intersection.x-0.5f);
-        int boardLetter = int(9.0f-intersection.y-0.5f);
-        BoardLocation click = BoardLocation(boardNum, boardLetter);
+            std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
+            int boardNum = int(intersection.x-0.5f);
+            int boardLetter = int(9.0f-intersection.y-0.5f);
+            BoardLocation click = BoardLocation(boardNum, boardLetter);
 
-        // Coordinates found, now execute potential move
+            // Coordinates found, now execute potential move
 
-        if ((0 > prevClick.boardCoordChar || 7 < prevClick.boardCoordChar) ||
-            (0 > prevClick.boardCoordNum  || 7 < prevClick.boardCoordNum )) {
-            // previous click not on board
-            prevClick = click;
-            return;
-        }
+            if ((0 > prevClick.boardCoordChar || 7 < prevClick.boardCoordChar) ||
+                (0 > prevClick.boardCoordNum  || 7 < prevClick.boardCoordNum )) {
+                // previous click not on board
+                prevClick = click;
+                return;
+            }
 
-        if ((0 > click.boardCoordChar || 7 < click.boardCoordChar) ||
-            (0 > click.boardCoordNum  || 7 < click.boardCoordNum )) {
-            // new click not on board
-            prevClick = BoardLocation(-1, -1);
-            return;
-        }
+            if ((0 > click.boardCoordChar || 7 < click.boardCoordChar) ||
+                (0 > click.boardCoordNum  || 7 < click.boardCoordNum )) {
+                // new click not on board
+                prevClick = BoardLocation(-1, -1);
+                return;
+            }
 
-        ChessPiece* start = coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum];
-        ChessPiece* dest = coordsToPiece[boardLetter][boardNum];
+            ChessPiece* start = coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum];
+            ChessPiece* dest = coordsToPiece[boardLetter][boardNum];
 
-        if (start == nullptr) {
-            // start has no piece -> not a move
-            prevClick = click;
-            return;
-        }
+            if (start == nullptr) {
+                // start has no piece -> not a move
+                prevClick = click;
+                return;
+            }
 
-        if (dest != nullptr) {
-            if (dest->colorWhite != start->colorWhite) {
-                // eat enemy piece
-                start->coords = click;
-                start->position = coordsToLocation[click];
-                dest->getEaten();
+            if (dest != nullptr) {
+                if (dest->colorWhite != start->colorWhite) {
+                    // eat enemy piece
+                    start->chessCoordinates = click;
+                    start->spatialPosition = coordsToLocation[click];
+                    dest->getEaten();
+                    coordsToPiece[click.boardCoordChar][click.boardCoordNum] = start;
+                    coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum] = nullptr;
+                    prevClick = BoardLocation(-1, -1);
+                } else {
+                    // trying to eat own piece -> do nothing
+                    prevClick = click;
+                }
+            } else {
+                // move piece
+                start->chessCoordinates = click;
+                start->spatialPosition = coordsToLocation[click];
                 coordsToPiece[click.boardCoordChar][click.boardCoordNum] = start;
                 coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum] = nullptr;
                 prevClick = BoardLocation(-1, -1);
-            } else {
-                // trying to eat own piece
-                prevClick = click;
             }
-        } else {
-            // move piece
-            start->coords = click;
-            start->position = coordsToLocation[click];
-            coordsToPiece[click.boardCoordChar][click.boardCoordNum] = start;
-            coordsToPiece[prevClick.boardCoordChar][prevClick.boardCoordNum] = nullptr;
-            prevClick = BoardLocation(-1, -1);
         }
     }
-}
 
+    // handles camera movement
     void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
         if (action == GLFW_PRESS) {
             switch (key) {
@@ -1200,12 +1237,12 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 
         for (size_t i = 0; i < totalObjects; i++) {
 
-            chessPieces[i].position = MODEL_LOCATIONS[i];
+            chessPieces[i].spatialPosition = MODEL_LOCATIONS[i];
             chessPieces[i].name = MODEL_NAMES[i];
             chessPieces[i].colorWhite = i < 18;
             if (i > 1) { 
                 // The board objects (2 first) are handled as chess pieces for now
-                chessPieces[i].coords = INITIAL_COORDS[i];
+                chessPieces[i].chessCoordinates = INITIAL_COORDS[i];
                 coordsToPiece[INITIAL_COORDS[i].boardCoordChar][INITIAL_COORDS[i].boardCoordNum] = &chessPieces[i];
             }
             if (i == 0) {
@@ -1603,9 +1640,9 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         uint32_t pieceId = currentImage%totalObjects;
 
         UniformBufferObject ubo{};
-        glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].position);
+        glm::mat4 moveMatrix = glm::translate(glm::mat4(1.0f), chessPieces[pieceId].spatialPosition);
         
-        ubo.model = moveMatrix;// * rotationMatrix; // if we want to rotate pieces around their z
+        ubo.model = moveMatrix;// * rotationMatrix; // use rotationMatrix if we want to rotate pieces around their z
         ubo.view = viewMatrix;
         ubo.proj = projMatrix;
 
@@ -1614,11 +1651,11 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 
     void updateCameraPosition() {
         currentFrameTime = std::chrono::high_resolution_clock::now();
-        delta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();//currentFrameTime - previousFrameTime;
+        timeDelta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();
         previousFrameTime = currentFrameTime;
-        cameraRotationAngle += rotateSpeed * delta * 40;
+        cameraRotationAngle += rotateSpeed * timeDelta * CAMERA_ROTATION_SPEED_MAGIC_CONST;
 
-        glm::vec4 offset(cameraDistance, 0.0f);
+        glm::vec4 offset(cameraOffsetFromTarget, 0.0f);
 
         glm::mat4 cameraRotationMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(cameraRotationAngle), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::vec3 cameraOffset = glm::vec3(cameraRotationMatrix * offset);
