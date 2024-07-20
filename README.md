@@ -81,12 +81,21 @@ relevant file: tiny_obj_loader.h
 
 ### Running the program: 
 
--Navigate to the project root folder
--Compile the program with
+Navigate to the project root folder (the default name is 3D-chess)
+Compile the program with
 ``` 
 make
 ```
--And finally, run the program with
+Then navigate to ./shaders in project root folder. We need to compile the shaders, and for that, you might need to make the compile script executable. This is achieved with
+```
+chmod +x compile.sh
+```
+Now you can compile the shaders with
+```
+./compile.sh
+```
+
+Finally navigate back to the project root folder, and run the program with
 ```
 ./Chess
 ```
