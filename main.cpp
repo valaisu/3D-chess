@@ -44,7 +44,7 @@ const glm::vec3 blackPiece(0.18f, 0.16f, 0.14f);
 const glm::vec3 whiteSquare(0.95f, 0.95f, 0.95f);
 const glm::vec3 blackSquare(0.05f, 0.05f, 0.05f);
 
-const std::string TEXTURE_PATH = "textures/viking_room.png"; // NOTE: this is not currently in use
+const std::string TEXTURE_PATH = "textures/empty.png"; // NOTE: this is not currently in use
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
