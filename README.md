@@ -106,11 +106,13 @@ Finally, navigate back to ./3D-chess , and run the program with
 ./Chess
 ```
 And a window like this should pop up:
+
 ![Program Running](https://github.com/valaisu/3D-chess/blob/main/pictures/ProgramRunning.png)
 
 # Architecture
 
 Here are some very general diagrams about how the program works. To see a bit more detailed explanations, see the starting comments in main.cpp
+
 ![General dieagrams](https://github.com/valaisu/3D-chess/blob/main/pictures/diagrams.jpg)
 
 # Controls
