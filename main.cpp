@@ -92,8 +92,8 @@ WHAT YOU SEE
     Between frames, the pieces are moved by editing one of the three UBO matrices (model),
     while the camera is moved by updating the ohter two (view, proj).
     
-    Chess pieces, VertexBuffers and UBOs are connected to each other by sharing the same index in their
-    respective vectors. 
+    Chess pieces, Index/VertexBuffers and UBOs are all contained in vectors. The components of one piece 
+    are connected to each other by sharing the same index in their respective vectors. 
     sidenote: The connection is a bit abstract, there is probably a smarted way to do this.
 
     Colors:
@@ -238,7 +238,7 @@ struct ChessPiece {
     BoardLocation chessCoordinates; // location in board coordinates
     bool colorWhite;
 
-    // default
+    // default constructor
     ChessPiece() : name(""), spatialPosition(0.0f, 0.0f, 0.0f), chessCoordinates(BoardLocation(0, 0)), colorWhite(false) {}
 
     ChessPiece(std::string name, std::vector<Vertex>* mesh, std::vector<uint32_t>* indices, glm::vec3 spatialPosition, BoardLocation chessCoordinates, bool colorWhite) :
