@@ -42,46 +42,62 @@ these are notes, not the final description
 Think if should mention something about the following in init: 
 
 Initialization
-    Validation layers
+    -Validation layers
+        using "VK_LAYER_KHRONOS_validation"
 
-    Physical device
+    -Physical device
+        select the first one available
     
-    Logical device
-    Queue families
+    -Logical device
+    -Queue families
+        check that we have what we need
 
-    Rendering surface
-    Swapchain
+    -Rendering surface
+        ???
+    -Swapchain
+        Double buffering
 
-    Pipeline
+    -Pipeline
         shaders, the basic pipeline
 
-    render pass
-    frameBuffers
+    -Render pass
+        attatchments: color, depth
+    -FrameBuffers
 
-    command buffers
-    Synchronization
+    -Command buffers
+    -Synchronization
 
-    Resource management
-        what you see
+    -Resource management
+        What you see
+            there is a separate "chapter" about this later
+            vertex and index buffers
+            uniform buffers
         descriptor sets
 
+    -Clean up
+        Most functions are self-explainatory. The order is
+        sometimes crucial.
 
 
 What you see
-    Lets first focus on the things you can see: The chess pieces
+    Lets first focus on the things you can see: The chess pieces consist of
     vector<VertexBuffer>         : The mesh, made of individual vertices
     vector<ChessPiece>           : Where which piece is
     Uniform Buffer Objecs (UBOs) : The transformation that move the pieces to where they should be
 
-    Chess pieces and VertexBuffers are connected to each other by sharing the same index. 
+    Chess pieces, VertexBuffers and UBOs are connected to each other by sharing the same index in their
+    respective vectors. 
     sidenote: The connection is a bit abstract, there is probably a smarted way to do this.
 
-    UBOs are recreated before each frame.
+    UBOs are recreated before each frame.        
 
     The board objects are also treated as chess pieces. They occupy indices 0 and 1 and never move. 
 
-
-Double buffering 
+    Colors:
+        Each object has an uniform base color. In addition, fragment shader modifies the
+        color based on the light position, the normals of the mesh and viewing direction to create
+        shadowing-like effects.
+        There is also most of the code for using textures, but the textures are not in use currently
 
 
 */
