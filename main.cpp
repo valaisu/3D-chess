@@ -120,12 +120,6 @@ const uint32_t HEIGHT = 600;
 const uint32_t TARGET_FPS = 60;
 const double TARGET_FRAME_DURATION_MS = 1000.0 / TARGET_FPS;
 
-// Maybe move these 4 to chess.h?
-const glm::vec3 whitePiece(0.84f, 0.66f, 0.46f);
-const glm::vec3 blackPiece(0.24f, 0.19f, 0.18f);
-const glm::vec3 whiteSquare(0.95f, 0.95f, 0.95f);
-const glm::vec3 blackSquare(0.05f, 0.05f, 0.05f);
-
 const std::string TEXTURE_PATH = "textures/empty.png"; // NOTE: this currently is not in use
 
 const int MAX_FRAMES_IN_FLIGHT = 2;

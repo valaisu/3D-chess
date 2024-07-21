@@ -14,6 +14,15 @@
 #include <array>
 #include <string>
 
+/*
+This library contains constants describing the chess board
+*/
+
+const glm::vec3 whitePiece(0.84f, 0.66f, 0.46f);
+const glm::vec3 blackPiece(0.24f, 0.19f, 0.18f);
+const glm::vec3 whiteSquare(0.95f, 0.95f, 0.95f);
+const glm::vec3 blackSquare(0.05f, 0.05f, 0.05f);
+
 // Describes a location on board defined by two coordinates
 struct BoardLocation {
     int boardCoordNum;
