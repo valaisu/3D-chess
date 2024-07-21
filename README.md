@@ -24,7 +24,7 @@ To run the project, you need to have the following
 - stb_image
 - tinyobjloader
 
-To get the first 5, I have summed up the linux setup guide from '[Vulkan Tutorial](https://vulkan-tutorial.com/Development_environment#page_Linux)'-website. You can also opt to follow that for the first 5 dependencies. 
+To get the first 5, I have summarized the linux setup guide from '[Vulkan Tutorial](https://vulkan-tutorial.com/Development_environment#page_Linux)'-website. You can also opt to follow that for the first 5 dependencies. 
 
 ### Downloading the dependencies
 
@@ -33,7 +33,7 @@ It's always recommended to start with
 sudo apt-get update
 ```
 
-**Vulkan**: Intall Vulkan SDK with
+**Vulkan**: Install Vulkan SDK with
 ```
 sudo apt install vulkan-tools
 sudo apt install libvulkan-dev
@@ -113,7 +113,7 @@ And a window like this should pop up:
 
 Here are some very general diagrams about how the program works. To see a bit more detailed explanations, see the starting comments in main.cpp
 
-![General dieagrams](https://github.com/valaisu/3D-chess/blob/main/pictures/diagrams.jpg)
+![General diagrams](https://github.com/valaisu/3D-chess/blob/main/pictures/diagrams.jpg)
 
 # Controls
 
