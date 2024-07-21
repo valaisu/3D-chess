@@ -39,7 +39,11 @@ sudo apt install vulkan-tools
 sudo apt install libvulkan-dev
 sudo apt install vulkan-validationlayers-dev spirv-tools
 ```
-If these don't work, check the tutorial website linked earlier for alternatives
+If the last one causes problems removing the dev handle might help:
+```
+sudo apt install spirv-tools
+sudo apt install vulkan-validationlayers
+```
 
 **Make**: For compiling the program make is needed, ubuntu should have it by default. To check, you can run
 ```
@@ -84,12 +88,11 @@ relevant file: tiny_obj_loader.h
 
 ### Running the program: 
 
-Navigate to the project root folder (the default name is 3D-chess)
-Compile the program with
+Navigate to the project root folder, the default name is 3D-chess. Compile the program with
 ``` 
 make
 ```
-Then navigate to ./shaders in project root folder. We need to compile the shaders, and for that, you might need to make the compile script executable. This is achieved with
+Then navigate to ./3D-Chess/shaders . We need to compile the shaders, and for that, you might need to make the compile script executable. This is achieved with
 ```
 chmod +x compile.sh
 ```
@@ -98,7 +101,7 @@ Now you can compile the shaders with
 ./compile.sh
 ```
 
-Finally navigate back to the project root folder, and run the program with
+Finally, navigate back to ./3D-chess , and run the program with
 ```
 ./Chess
 ```
