@@ -37,70 +37,82 @@
 /* 
 About architecture
 
-these are notes, not the final description
+INITIALIZATION
 
-Think if should mention something about the following in init: 
-
-Initialization
     -Validation layers
-        using "VK_LAYER_KHRONOS_validation"
+        Program uses "VK_LAYER_KHRONOS_validation"
 
     -Physical device
-        select the first one available
+        Select the first one available
     
     -Logical device
     -Queue families
-        check that we have what we need
+        Check that we have the queue families needed
 
     -Rendering surface
-        ???
+        Use glfw
     -Swapchain
         Double buffering
 
     -Pipeline
-        shaders, the basic pipeline
+        1. input assembler 
+        2. vertex shader (shader.vert)
+        3. rasterization 
+        4. fragment shader (shader.frag)
+        5. color blending 
+
+        From the classic pipeline, tessellation and geometry shaders are skipped
 
     -Render pass
-        attatchments: color, depth
+        Attatchments: color, depth
     -FrameBuffers
 
     -Command buffers
     -Synchronization
 
     -Resource management
-        What you see
-            there is a separate "chapter" about this later
-            vertex and index buffers
-            uniform buffers
-        descriptor sets
+        Chess Pieces consist of (more about these later)
+            Vertex and index buffers = The mesh/geometry
+            Uniform buffer objects   = Transformations
+            ChessPiece struct        = General info
+        Descriptor sets
+            grant shaders access to UBOs and textures (latter not used)
 
     -Clean up
-        Most functions are self-explainatory. The order is
-        sometimes crucial.
+        Functions inside cleanup() are quite self-explainatory. The order is sometimes crucial.
 
 
-What you see
-    Lets first focus on the things you can see: The chess pieces consist of
-    vector<VertexBuffer>         : The mesh, made of individual vertices
-    vector<ChessPiece>           : Where which piece is
-    Uniform Buffer Objecs (UBOs) : The transformation that move the pieces to where they should be
+WHAT YOU SEE
 
+    As mentioned before Chess Pieces and actually also the board objects consist of
+        Vertex and index buffers = The mesh/geometry
+        Uniform Buffers Objects  = Transformations
+        ChessPiece struct        = General info
+    
+    Between frames, the pieces are moved by editing one of the three UBO matrices (model),
+    while the camera is moved by updating the ohter two (view, proj).
+    
     Chess pieces, VertexBuffers and UBOs are connected to each other by sharing the same index in their
     respective vectors. 
     sidenote: The connection is a bit abstract, there is probably a smarted way to do this.
-
-    UBOs are recreated before each frame.        
-
-    The board objects are also treated as chess pieces. They occupy indices 0 and 1 and never move. 
 
     Colors:
         Each object has an uniform base color. In addition, fragment shader modifies the
         color based on the light position, the normals of the mesh and viewing direction to create
         shadowing-like effects.
-        There is also most of the code for using textures, but the textures are not in use currently
-
+        Most of the code needed for using textures does exist, but the textures are not in use currently    
 
 */
+
+/*
+About the coordinates
+
+A chess board has 8x8 squares. Each square is 1x1 sized in vulkan world coordinates. The center
+of the board is is located at (4.5, 4.5, 0.0), meaning the centers of the squares are at (1.0, 1.0),
+(1.0, 2.0), ... (8.0, 8.0). This reflects how the chess board coordinates in chess notation 
+traditionally range from a1 to h8.
+*/
+
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -316,9 +328,9 @@ private:
     // Camera related
     glm::vec3 cameraTarget = glm::vec3(4.5f, 4.5f, 0.0f);
     glm::vec3 cameraOffsetFromTarget = glm::vec3(6.0f, 6.0f, 10.0f);
-    glm::vec3 cameraPosition;// = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraPosition;
     float cameraRotationAngle = 0.0;
-    float rotateSpeed = 0.0f;
+    float rotateDirection = 0.0f;
     float timeDelta = 0.0f;
     std::chrono::high_resolution_clock::time_point currentFrameTime = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point previousFrameTime = std::chrono::high_resolution_clock::now();
@@ -465,19 +477,19 @@ private:
         if (action == GLFW_PRESS) {
             switch (key) {
                 case GLFW_KEY_LEFT:
-                    rotateSpeed += 1.0;
+                    rotateDirection += 1.0;
                     break;
                 case GLFW_KEY_RIGHT:
-                    rotateSpeed -= 1.0;
+                    rotateDirection -= 1.0;
                     break;
             }
         } else if (action == GLFW_RELEASE) {
             switch (key) {
                 case GLFW_KEY_LEFT:
-                    rotateSpeed -= 1.0;
+                    rotateDirection -= 1.0;
                     break;
                 case GLFW_KEY_RIGHT:
-                    rotateSpeed += 1.0;
+                    rotateDirection += 1.0;
                     break;
             }
         }
@@ -942,6 +954,7 @@ private:
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
 
+        // note for self: essentially a smoothing function
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
@@ -1699,24 +1712,28 @@ private:
     }
 
     void updateCameraPosition() {
+        // update rotation angle
         currentFrameTime = std::chrono::high_resolution_clock::now();
         timeDelta = std::chrono::duration<float, std::chrono::seconds::period>(currentFrameTime - previousFrameTime).count();
         previousFrameTime = currentFrameTime;
-        cameraRotationAngle += rotateSpeed * timeDelta * CAMERA_ROTATION_SPEED_MAGIC_CONST;
+        cameraRotationAngle += rotateDirection * timeDelta * CAMERA_ROTATION_SPEED_MAGIC_CONST;
 
+        // calc camera position
         glm::vec4 offset(cameraOffsetFromTarget, 0.0f);
-
         glm::mat4 cameraRotationMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(cameraRotationAngle), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::vec3 cameraOffset = glm::vec3(cameraRotationMatrix * offset);
         cameraPosition = cameraTarget + cameraOffset;
 
+        // calc the UBO matrices
         viewMatrix = glm::lookAt(cameraPosition, cameraTarget, glm::vec3(0.0f, 0.0f, 1.0f));
         projMatrix = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 20.0f);
-        projMatrix[1][1] *= -1;
+        projMatrix[1][1] *= -1; // vulkan coords a bit weird
     }
 
     void drawFrame() {
+        // signaled by vkQueueSubmit once that is ready
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+        vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1728,12 +1745,12 @@ private:
             throw std::runtime_error("failed to acquire swap chain image!");
         }
 
+        // Camera and chessPiece movement
         updateCameraPosition();
         for (size_t i = 0; i < totalObjects; i++) {
             updateUniformBuffer(currentFrame * totalObjects + i);
         }
 
-        vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
         vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
         recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -1741,6 +1758,7 @@ private:
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
+        // imageAvailableSemaphore signaled by vkAcquireNextImageKHR
         VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
         VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         submitInfo.waitSemaphoreCount = 1;
@@ -1750,6 +1768,7 @@ private:
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 
+        // signaled when command buffer finishes executing
         VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
