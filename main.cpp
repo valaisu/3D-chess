@@ -39,6 +39,34 @@ About architecture
 
 these are notes, not the final description
 
+Think if should mention something about the following in init: 
+
+Initialization
+    Validation layers
+
+    Physical device
+    
+    Logical device
+    Queue families
+
+    Rendering surface
+    Swapchain
+
+    Pipeline
+        shaders, the basic pipeline
+
+    render pass
+    frameBuffers
+
+    command buffers
+    Synchronization
+
+    Resource management
+        what you see
+        descriptor sets
+
+
+
 What you see
     Lets first focus on the things you can see: The chess pieces
     vector<VertexBuffer>         : The mesh, made of individual vertices
@@ -53,12 +81,8 @@ What you see
     The board objects are also treated as chess pieces. They occupy indices 0 and 1 and never move. 
 
 
-Triple buffering
+Double buffering 
 
-
-Initial setup
-    There is a lot of checking if the system meets the requirements of the program. I probably 
-    won't comment on those parts further.
 
 */
 
@@ -299,6 +323,7 @@ private:
     glm::mat4 viewMatrix; // same for each UBO
     glm::mat4 projMatrix; // same for each UBO
 
+
     bool framebufferResized = false;
 
     // Fills a map[Board coords -> spatial location]
@@ -319,7 +344,6 @@ private:
         window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
         glfwSetWindowUserPointer(window, this);
         glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
-
 
         // setup event listeners
         glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -366,7 +390,7 @@ private:
             float multiplier = -cameraPosition.z / rayDirection.z;
             glm::vec3 intersection = cameraPosition + multiplier * rayDirection;
 
-            std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
+            //std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
             int boardNum = int(intersection.x-0.5f);
             int boardLetter = int(9.0f-intersection.y-0.5f);
             BoardLocation click = BoardLocation(boardNum, boardLetter);
@@ -443,20 +467,22 @@ private:
         }
     }
 
+    // Most of the init functions are used only once during programs lifetime.
+    // The ones that are not, are marked with "//"
     void initVulkan() {
         createInstance();
         setupDebugMessenger();
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-        createSwapChain();
-        createImageViews();
+        createSwapChain();          //
+        createImageViews();         //
         createRenderPass();
         createDescriptorSetLayout();
         createGraphicsPipeline();
         createCommandPool();
-        createDepthResources();
-        createFramebuffers();
+        createDepthResources();     //
+        createFramebuffers();       //
         createTextureImage();
         createTextureImageView();
         createTextureSampler();
@@ -1239,19 +1265,24 @@ private:
 
             chessPieces[i].spatialPosition = MODEL_LOCATIONS[i];
             chessPieces[i].name = MODEL_NAMES[i];
-            chessPieces[i].colorWhite = i < 18;
             if (i > 1) { 
-                // The board objects (2 first) are handled as chess pieces for now
+                // The board objects (2 first "chessPieces") don't need these
                 chessPieces[i].chessCoordinates = INITIAL_COORDS[i];
                 coordsToPiece[INITIAL_COORDS[i].boardCoordChar][INITIAL_COORDS[i].boardCoordNum] = &chessPieces[i];
             }
+            
+            // different colors for different objects
             if (i == 0) {
+                chessPieces[i].colorWhite = true;
                 loadModel(MODEL_PATHS[i], whiteSquare, i);
             } else if (i == 1) {
+                chessPieces[i].colorWhite = false;
                 loadModel(MODEL_PATHS[i], blackSquare, i);
             } else if (i < 18) {
+                chessPieces[i].colorWhite = true;
                 loadModel(MODEL_PATHS[i], whitePiece, i);
             } else {
+                chessPieces[i].colorWhite = false;
                 loadModel(MODEL_PATHS[i], blackPiece, i);
             }
         }
@@ -1261,7 +1292,7 @@ private:
     void loadModel(std::string path, glm::vec3 color, uint32_t modelIndex) {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
+        std::vector<tinyobj::material_t> materials; // currently not used
         std::string warn, err;
 
         if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str())) {
@@ -1280,13 +1311,15 @@ private:
                     attrib.vertices[3 * index.vertex_index + 2]
                 };
 
+                // again, this is tot currently used
                 vertex.texCoord = {
                     attrib.texcoords[2 * index.texcoord_index + 0],
                     1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                 };
 
-                vertex.color = color;
+                vertex.color = color; // object has uniform color
 
+                // shader.frag uses normals for coloring
                 vertex.normal = {
                     attrib.normals[3 * index.normal_index + 0],
                     attrib.normals[3 * index.normal_index + 1],
@@ -1313,7 +1346,7 @@ private:
         // .erase from chessPieces
 
         // totalObjects -= 1;
-        // resize index and vertex buffers
+        // resize index and vertex buffers and memories
     }
 
     void createPiece(BoardLocation loc, std::string modelPath, bool isWhite) {
