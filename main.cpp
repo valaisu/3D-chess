@@ -388,11 +388,13 @@ private:
     void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
             double xpos, ypos;
+            int width, height;
             glfwGetCursorPos(window, &xpos, &ypos);
+            glfwGetWindowSize(window, &width, &height);
 
             // get click coords
-            float ndcX = (2.0f * xpos) / WIDTH - 1.0f;
-            float ndcY = 1.0f - (2.0f * ypos) / HEIGHT;
+            float ndcX = (2.0f * xpos) / width - 1.0f;
+            float ndcY = 1.0f - (2.0f * ypos) / height;
 
             glm::vec4 ndcCoords(ndcX, ndcY, -1.0f, 1.0f); // not sure about the 3rd member
 
@@ -412,7 +414,7 @@ private:
             float multiplier = -cameraPosition.z / rayDirection.z;
             glm::vec3 intersection = cameraPosition + multiplier * rayDirection;
 
-            //std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
+            std::cout << "Intersection with Z=0 plane: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
             int boardNum = int(intersection.x-0.5f);
             int boardLetter = int(9.0f-intersection.y-0.5f);
             BoardLocation click = BoardLocation(boardNum, boardLetter);
